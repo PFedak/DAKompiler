@@ -204,13 +204,14 @@ def assignReg(w, fmt ,op):
 
     def get_value(history, instr):
         if fmt == 'S+xI':
-            return Expression.build(op, history.read(instr.sourceReg), Literal(instr.immediate))
+            return Expression.build(op, history.read(instr.sourceReg, basicTypes.word), Literal(instr.immediate))
         elif fmt == 'S+I':
-            return Expression.build(op, history.read(instr.sourceReg), Literal(extend(instr.immediate)))
+            return Expression.build(op, history.read(instr.sourceReg, basicTypes.word), Literal(extend(instr.immediate)))
         elif fmt == 'f(I)':
             return Literal(op(instr.immediate))
         elif fmt == 'F+F':
-            return Expression.build(op, history.read(instr.fs), history.read(instr.ft), flop=True)
+            return Expression.build(op, history.read(instr.fs, basicTypes.single), 
+                                        history.read(instr.ft, basicTypes.single), flop=True)
         elif fmt == '@F':
             if op == 'id':
                 return history.read(instr.fs)
@@ -219,7 +220,8 @@ def assignReg(w, fmt ,op):
         elif fmt == 'T<<A':
             return Expression.build(op, history.read(instr.targetReg), Literal(instr.shift))
         elif fmt == 'S+T':
-            return Expression.build(op, history.read(instr.sourceReg), history.read(instr.targetReg))
+            return Expression.build(op, history.read(instr.sourceReg, basicTypes.word),
+                                        history.read(instr.targetReg, basicTypes.word))
         raise Error("Bad format")
 
     return foo
@@ -231,20 +233,23 @@ def loadMemory(datatype):
     def foo(instr, history):
         if instr.sourceReg == Register.SP:
             #TODO account for more general reads (ie, just the lower bytes of a word)
-            value = history.read(basicTypes.Stack(extend(instr.immediate)))  
+            value = history.read(basicTypes.Stack(extend(instr.immediate)), datatype)  
         else:
-            address = Expression.build('+', history.read(instr.sourceReg), Literal(extend(instr.immediate)))
+            address = Expression.build('+', history.read(instr.sourceReg, basicTypes.word), 
+                                            Literal(extend(instr.immediate)))
             value = history.lookupAddress(datatype, address)
         return InstrResult.register, history.write(instr.targetReg, value)
     return foo
 
 def storeMemory(datatype):
     def foo(instr, history):
-        value = history.read(instr.targetReg)
+        value = history.read(instr.targetReg, datatype)
         if instr.sourceReg == Register.SP:
             return InstrResult.register, history.write(basicTypes.Stack(extend(instr.immediate)), value) 
         else:
-            return InstrResult.write, value, history.lookupAddress(datatype,Expression.build('+', history.read(instr.sourceReg), Literal(extend(instr.immediate))))
+            return InstrResult.write, value, history.lookupAddress(datatype, 
+                Expression.build('+', history.read(instr.sourceReg, basicTypes.word), 
+                                      Literal(extend(instr.immediate))))
     return foo
 
 def branchMaker(comp, withZero, likely = False):
@@ -253,8 +258,8 @@ def branchMaker(comp, withZero, likely = False):
             return InstrResult.jump, None, extend(instr.immediate)
         return (InstrResult.likely if likely else InstrResult.branch, 
                     Expression.build(comp, 
-                        history.read(instr.sourceReg), 
-                        history.read(Register.R0 if withZero else instr.targetReg)), 
+                        history.read(instr.sourceReg, basicTypes.word), 
+                        history.read(Register.R0 if withZero else instr.targetReg, basicTypes.word)), 
                     extend(instr.immediate))
     return doBranch
 
@@ -307,7 +312,8 @@ conversionList = {
     RegOp.SRL: assignReg('D','T<<A','>>'),
     RegOp.SRA: assignReg('D','T<<A','>a'),
     RegOp.JR: lambda instr, history: (InstrResult.end,) if instr.sourceReg == Register.RA else (InstrResult.unhandled, Expression.build('@','JR',history.read(instr.sourceReg))),
-    RegOp.JALR: lambda instr, history: (InstrResult.unhandled, 'JALR', history.read(instr.sourceReg)), 
+    RegOp.JALR: lambda instr, history: (InstrResult.unhandled, 'JALR', 
+                                            history.read(instr.sourceReg, basicTypes.address)), 
     RegOp.ADD: assignReg('D','S+T','+'),
     RegOp.ADDU: assignReg('D','S+T','+'),
     RegOp.SUB: assignReg('D','S+T','-'),
@@ -502,7 +508,7 @@ class VariableHistory:
             self.argList.append(reg)
             self.write(reg, Symbol(showName, fmt))
 
-    def read(self, var):
+    def read(self, var, fmt = basicTypes.unknown):
         if var in self.states:
             uncertain = False
             for st in reversed(self.states[var]):
@@ -510,19 +516,20 @@ class VariableHistory:
                     if uncertain:
                         st.explicit = True
                         break
-                        
                     else:
+                        if st.value.type == basicTypes.unknown:
+                            st.value.type = fmt
                         return st.value
                 elif self.now.isCompatibleWith(st.context):
                     st.explicit = True
                     uncertain = True
-            return Symbol(VariableHistory.getName(var))
+            return Symbol(VariableHistory.getName(var), fmt)
         else:
             symName = VariableHistory.getName(var)
             if VariableHistory.couldBeArg(var): 
                 self.argList.append(var)
                 symName = 'arg_' + symName
-            self.states[var].append(VariableState(self.getName(var), Symbol(symName), self.now))
+            self.states[var].append(VariableState(self.getName(var), Symbol(symName, fmt), self.now))
             return self.states[var][-1].value
         
 
@@ -541,7 +548,7 @@ class VariableHistory:
             return False
         # have we marked it as "bad" - 
         try:
-            return self.states[var][-1].value.type not in [basicTypes.unknown, basicTypes.bad]
+            return self.states[var][-1].value.type != basicTypes.bad
         except:
             # TODO: check that a value is set along all branches, unsure how often this will come up
             return True
@@ -753,7 +760,7 @@ def makeSymbolic(name, mipsData, bindings, arguments = []):
                 if funcCall in bindings['functions']:
                     title = bindings['functions'][funcCall].name
                     for reg, argName, fmt in bindings['functions'][funcCall].args:
-                        argList.append((argName, history.read(reg)))
+                        argList.append((argName, history.read(reg, fmt)))
                         history.markBad(reg)
                 else:
                     title = 'fn%06x' % funcCall
@@ -767,7 +774,7 @@ def makeSymbolic(name, mipsData, bindings, arguments = []):
                         else:
                             break
                 
-                marker = Symbol('returnValue_{:x}'.format(lineNum*4-4))
+                marker = Symbol('returnValue_{:x}'.format((lineNum - 1)*4))
                 currBlock.code.append((InstrResult.function, title, argList, marker))
                 history.write(Register.V0, marker)
                 history.write(FloatRegister.F0, marker)

@@ -18,7 +18,7 @@ class TestContexts(unittest.TestCase):
         self.assertEqual(rel.cnf[0][1], True)
 
     def test_completeMerge(self):
-        for L in range(3,8):    #currently takes ~2.3 seconds on my machine
+        for L in range(3,8):
             base = []
             for i in range(1<<L):
                 temp = symbolify.Branch()
@@ -29,9 +29,9 @@ class TestContexts(unittest.TestCase):
 
     @unittest.skip('takes a while')
     def test_bigMerge(self):
-        #currently takes ~2.3 seconds on my machine
+        #currently takes ~2 seconds on my machine
         base = []
-        L = 9
+        L = 8
         for i in range(1<<L):
             temp = symbolify.Branch()
             for j in range(L):

@@ -59,8 +59,8 @@ def decompileFunction(ram, bindings, address, name=None, args=[]):
         print("function did not end in the given data")
     if not name:
         name = 'fn%06x' % address
+    niceArgs = []
     if args:
-        niceArgs = []
         for spec in args:
             # DRY taken to a bit of an extreme, maybe
             parseArgument(spec.split(), niceArgs, bindings)
@@ -86,5 +86,4 @@ def showMIPSblock(ram, address, length):
 
 b = loadBindings('sm64 ram map.txt', 'J')
 marioRam = RAMSnapshot('marioRam',0x80000000)
-print(decompileFunction(marioRam, b, 0x802c8504, args = ['A0 objA Object', 'A1 objB Object']))
-print(decompileFunction(marioRam,b, 0x8027CF68, args = ['A0 obj Object', 'A1 transform AffineTransform']))
+print(decompileFunction(marioRam,b, 0x8026BFC8, args = ['A0 mario Mario']))

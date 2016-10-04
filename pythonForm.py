@@ -1,4 +1,5 @@
 from symbolify import InstrResult as IR, Context
+import basicTypes
 
 indent = ' '*4
 
@@ -9,7 +10,7 @@ def renderReg(state):
     return '{0.name} = {0.value}'.format(state) if state.explicit else None
 
 def renderFunc(title, args, val):
-    return '{} = {}({})'.format(val, title, 
+    return ('{0} = {1}({2})' if val.type != basicTypes.unknown else '{1}({2})').format(val, title, 
         ', '.join('{} = {}'.format(r,v) if r else format(v) for r,v in args))
 
 def renderWrite(value, target):
