@@ -40,8 +40,11 @@ class Literal:
 
         if 'h' in spec or topbyte == 0x80:
             return hex(self.value)
-        else:
-            return str(self.value)
+
+        # silly heuristic
+        h = hex(self.value)
+        d = str(self.value)
+        return h if (h.count('0')-1)/len(h) > d.count('0')/len(d) else d
 
     def __repr__(self):
         return 'Literal({:#x})'.format(self.value)
