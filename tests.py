@@ -112,6 +112,7 @@ class TestStructLookup(unittest.TestCase):
         self.assertEqual(self.history.lookupAddress(basicTypes.word, self.foo).name, 'foo.zero')
 
     def test_subMember(self):
+        self.assertEqual(self.history.lookupAddress(basicTypes.short, build('+',self.foo,Lit(4))).name, 'foo.sub.a')
         self.assertEqual(self.history.lookupAddress(basicTypes.byte, build('+',self.foo,Lit(7))).name, 'foo.sub.c')
 
     def test_array(self):
@@ -124,7 +125,7 @@ class TestStructLookup(unittest.TestCase):
         self.assertEqual(self.history.lookupAddress(basicTypes.short, address), 'foo.array[bar]')
 
     def test_unknown(self):
-        self.assertEqual(self.history.lookupAddress(basicTypes.short, build('+',self.foo, Lit(8))).name, 'foo._0x8')
+        self.assertEqual(self.history.lookupAddress(basicTypes.short, build('+',self.foo, Lit(8))).name, 'foo.h_0x8')
 
     def test_tooFar(self):
         self.assertRaises(Exception, self.history.lookupAddress, basicTypes.word, build('+',self.foo, Lit(0x20)))

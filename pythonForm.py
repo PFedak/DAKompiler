@@ -45,15 +45,16 @@ def renderToPython(codeTree, booleans, level = 0):
         else:
             newLevel = level + 1
             if block.relative.isCompatibleWith(previousRelative):
-                prefix = '{}if {}:'.format(indent*level, 
-                        ' or '.join(
-                            ' and '.join(
-                                ('{}' if val else '{:!}').format(booleans[ch]) for ch, val in br.items()
-                            )
-                        for br in block.relative.cnf)
-                    )
+                keyword = '{}if {}:'
             else:
-                prefix = (indent*level) + 'else:'
+                keyword = '{}elif {}:'
+            prefix = keyword.format(indent*level, 
+                    ' or '.join(
+                        ' and '.join(
+                            ('{}' if val else '{:!}').format(booleans[ch]) for ch, val in br.items()
+                        )
+                    for br in block.relative.cnf)
+                )
         inner = renderToPython(block, booleans, newLevel)
         if inner:
             if prefix:

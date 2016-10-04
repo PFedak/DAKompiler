@@ -79,6 +79,8 @@ class Symbol(Symbolic):
     
 class Expression(Symbolic):
 
+    logicOpposite = {'==':'!=', '!=':'==', '>':'<=', '<':'>=', '<=':'>', '>=':'<'}
+
     def __init__(self, op, args, fmt = basicTypes.unknown):
         self.op = op
         self.args = args
@@ -88,7 +90,7 @@ class Expression(Symbolic):
         if self.op == '@':
             return '{}({})'.format(self.args[0], self.args[1])
         if '!' in spec and self.type == basicTypes.boolean:
-            sep = ' {} '.format({'==':'!=', '!=':'==', '>':'<=', '<':'>=', '<=':'>', '>=':'<'}[self.op])
+            sep = ' {} '.format(Expression.logicOpposite[self.op])
         elif self.op in '* / **'.split():
             sep = self.op
         else:
@@ -135,9 +137,11 @@ class Expression(Symbolic):
 
         if op in '< > <= >= == !='.split():
             new.type = basicTypes.boolean
-            if op == '==':
-                if left.type == basicTypes.boolean and right == Literal(0):
+            if left.type == basicTypes.boolean and right == Literal(0):
+                if op == '!=':
                     return left
+                if op == '==':
+                    return Expression(Expression.logicOpposite[left.op], left.args)
         return new
 
     @staticmethod
@@ -229,7 +233,7 @@ def storeMemory(datatype):
 
 def branchMaker(comp, withZero, likely = False):
     def doBranch(instr, history):
-        if instr.sourceReg == instr.targetReg and instr.opcode == MainOp.BEQ:
+        if instr.opcode == MainOp.BEQ and instr.sourceReg == instr.targetReg:
             return InstrResult.jump, None, extend(instr.immediate)
         return (InstrResult.likely if likely else InstrResult.branch, 
                     Expression.build(comp, 
@@ -329,6 +333,7 @@ conversionList = {
     SpecialOp.NOP: lambda instr,history: (InstrResult.none,),
     SpecialOp.BGEZL: branchMaker('<', withZero = True, likely = True),
     SpecialOp.BGEZ: branchMaker('<', withZero = True),
+    SpecialOp.BLTZ: branchMaker('>=', withZero = True),
 }
 
 class Branch(dict):
@@ -446,14 +451,9 @@ class Context:
     def isCompatibleWith(self, other):
         """Check if any branch could satisfy both contexts"""
         for base in self.cnf:
-            matched = False
-            for target in other.cnf:
-                if base.isCompatibleWith(target):
-                    matched = True
-                    break
-            if not matched:
-                return False
-        return True
+            if [t for t in other.cnf if base.isCompatibleWith(t)]:
+                return True
+        return False
 
     def isTrivial(self):
         return len(self.cnf) == 1 and not self.cnf[0]
@@ -525,7 +525,7 @@ class VariableHistory:
             return False
         # have we marked it as "bad" - 
         try:
-            return self.states[var][-1].value.type != basicTypes.bad
+            return self.states[var][-1].value.type not in [basicTypes.unknown, basicTypes.bad]
         except:
             # TODO: check that a value is set along all branches, unsure how often this will come up
             return True
@@ -533,23 +533,30 @@ class VariableHistory:
     def lookupAddress(self, fmt, address):
         if isinstance(address, Literal):
             if address.value in self.bindings['globals']:
-                return self.bindings['globals'][address.var]
+                base = Symbol(*self.bindings['globals'][address.value])
+                if self.isAddressable(base.type):
+                    return self.subLookup(fmt, base.name, base.type, 0)
+                else:
+                    return base
+            bestOffset = max(x for x in self.bindings['globals'] if x <= address.value)
+            base = Symbol(*self.bindings['globals'][bestOffset])
+            relOffset = address.value - bestOffset
+            if relOffset >= self.getSize(base.type):
+                return Symbol('{}({:#010x})'.format(fmt, address.value), fmt)
             else:
-                #TODO check for direct access to struct members
-                return Symbol('%s(%0#10X)' % (fmt, address.value), fmt)
-        elif isinstance(address.type, basicTypes.Pointer):
-            return Symbol(address.type.target if address.type.target else address.name, address.type.pointedType)
-        
+                return self.subLookup(fmt, base.name, base.type, relOffset)
+
         base = None
-        others = []
         memOffset = 0
-        #check relative to a symbol
+        others = []            
         if isinstance(address, Symbol):
-            if address.type in self.bindings['structs']:
+            if isinstance(address.type, basicTypes.Pointer):
+                return Symbol(address.type.target if address.type.target else address.name, address.type.pointedType)
+            if self.isAddressable(address.type):
                 base = address
         elif address.op == '+':
             for term in address.args:
-                if term.type in self.bindings['structs']:
+                if self.isAddressable(term.type):
                     if base:
                         raise Exception('adding structs')
                     base = term
@@ -557,6 +564,7 @@ class VariableHistory:
                     memOffset = term.value
                 else:
                     others.append(term)
+
         if not base:
             #check for trig lookup
             if fmt == basicTypes.single and memOffset in self.bindings['trigtables']:
@@ -565,38 +573,44 @@ class VariableHistory:
                     return Symbol('{}Table({})'.format(self.bindings['trigtables'][memOffset], angle))
                 except:
                     pass
-            #TODO record information to match with existing struct/populate new ones
+
+            # no idea what we are looking at, process it anyway
             return Symbol('{}({:h})'.format(fmt, address), fmt)
-
-        baseType = baseType = self.bindings['structs'][base.type]
-
-        if memOffset in baseType.members:
-            member = self.bindings['structs'][base.type].members[memOffset]
-            if not isinstance(member.type, basicTypes.Array) and not isinstance(member.type, str):
-                return Symbol('%s.%s' % (base.name, member.name))
-            #otherwise, use the sub expression lookup
-        elif memOffset >= baseType.size:
-            raise('trying to look up address %#x in %s (only %#x bytes)' % (memOffset, baseType.name, baseType.size))
+        if memOffset >= self.getSize(base.type):
+            raise Exception('trying to look up address %#x in %s (only %#x bytes)' % (memOffset, base.type, self.getSize(base.type)))
 
         # determine which member struct we are trying to access
-        #TODO change data structure to process this ahead of time instead of looping through
-        for off, var in baseType.members.items():
-            if off <= memOffset < off + self.getSize(var.type):
-                if isinstance(var.type, basicTypes.Array):
-                    #TODO check alignment, take into account e.g. euler angles that are word-aligned instead of short-aligned
-                    if others:
-                        #TODO check the variable offset for multiplication/shift, and undo it
-                        index = Expression.build('+', Expression('+',others), Literal(memOffset - off ))
-                        return Symbol('{}({}.{.name} + {:h})'.format(fmt, base, var, index), var.type.pointedType)
-                    else:
-                        index = (memOffset - off)//self.getSize(var.type.pointedType)
-                        return Symbol('{}.{.name}[{:d}]'.format(base, var, index), var.type.pointedType)
-                elif var.type in self.bindings['structs']:
-                    subVar = self.lookupAddress(fmt, Expression.build('+',Symbol(var.name, var.type), Literal(memOffset-off)))
-                    return Symbol('{}.{}'.format(base, subVar), subVar.type)
-        #unknown member
-        return Symbol('{}._{:#x}'.format(base, memOffset))
+        return self.subLookup(fmt, base.name, base.type, memOffset, others)
+
         
+    def subLookup(self, fmt, prefix, superType, address, others = []):
+        """Recursively find data at the given address from the start of a type"""
+        if isinstance(superType, basicTypes.Array):
+            if others:
+                #TODO check the variable offset for multiplication/shift, and undo it
+                index = Expression('+', others + [Literal(address)])
+                return Symbol('{}({} + {:h})'.format(fmt, prefix, index), superType.pointedType)
+            else:
+                index = address//self.getSize(superType.pointedType)
+                return Symbol('{}[{:d}]'.format(prefix, index), superType.pointedType)
+        if isinstance(superType, basicTypes.Pointer):
+            return Symbol(superType.target if superType.target else prefix, superType.pointedType)
+        if isinstance(superType, str) and superType in self.bindings['structs']:
+            members = self.bindings['structs'][superType].members
+            bestOffset = max(x for x in members if x <= address)
+            base = Symbol(*members[bestOffset])
+            if address < bestOffset + self.getSize(base.type):
+                if self.isAddressable(base.type):
+                    return self.subLookup(fmt, '{}.{}'.format(prefix, base), base.type, address - bestOffset, others)
+                if not others:
+                    #TODO account for reading the lower short of a word, etc.
+                    return Symbol('{}.{}'.format(prefix, base), base.type)
+        # nothing matched
+        if others:
+            return Symbol('{}({} + {:h})'.format(fmt, prefix, Expression.build('+', Expression('+',others), Literal(address))), fmt)
+        else:
+            return Symbol('{}.{}_{:#x}'.format(prefix, basicTypes.getCode(fmt), address), fmt)
+
     @staticmethod
     def getName(var):
         try:
@@ -607,21 +621,33 @@ class VariableHistory:
             except:
                 return var
 
-    def getSize(self, x):
+    def getSize(self, t):
         try:
-            return x.size
+            return t.size
         except:
-            if isinstance(x, basicTypes.Pointer):
+            if isinstance(t, basicTypes.Pointer):
                 return 4
-            if isinstance(x, basicTypes.Flag):
-                return x.base.size
-            if isinstance(x, basicTypes.Array):
-                return x.length * self.getSize(x.pointedType) 
-            if x in self.bindings['structs']:
-                return self.bindings['structs'][x].size
-            if x in self.bindings['enums']:
-                return self.getSize(self.bindings['enums'][x].base)
-        print('failed to size', x)
+            if isinstance(t, basicTypes.Flag):
+                return t.base.size
+            if isinstance(t, basicTypes.Array):
+                return t.length * self.getSize(t.pointedType) 
+            if t in self.bindings['structs']:
+                return self.bindings['structs'][t].size
+            if t in self.bindings['enums']:
+                return self.getSize(self.bindings['enums'][t].base)
+        print('failed to size', t)
+
+    def isAddressable(self, t):
+        if isinstance(t, basicTypes.Primitive):
+            return False
+        if isinstance(t, basicTypes.Pointer) or isinstance(t, basicTypes.Array):
+            return True
+        if isinstance(t, str):
+            # assume anything unspecified is addressible
+            return t not in self.bindings['enums']
+        
+        #flags, anything else
+        return False
 
     @staticmethod
     def couldBeArg(var):
@@ -718,7 +744,12 @@ def makeSymbolic(name, mipsData, bindings, arguments = []):
                     for reg in [Register.A0, FloatRegister.F12, Register.A1, FloatRegister.F14, Register.A2, Register.A3]:
                         if history.isValid(reg):
                             argList.append((reg.name, history.read(reg)))
-                            history.markBad(reg)
+                        history.markBad(reg)
+                    for s in (basicTypes.Stack(i) for i in range(0x10, 0x20, 4)):
+                        if history.isValid(s):
+                            argList.append(('stack_{:x}'.format(s.offset), history.read(s)))
+                        else:
+                            break
                 
                 marker = Symbol('returnValue_{:x}'.format(lineNum*4-4))
                 currBlock.code.append((InstrResult.function, title, argList, marker))
