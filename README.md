@@ -30,39 +30,39 @@ where `address` is the absolute address your function of interest starts at, and
 With any luck, you'll see something along the lines of
 ```
 def fn8027d14c(obj):
-    if obj._0x18 == ubyte(word(0X8032CF90) + 0x14):
-        if obj.transform != 0:
-            returnValue_74 = fn80379f60(A0 = (short(0X8033A770) << 6) + 0x8033a7b8, A1 = obj.transform, A2 = (short(0X8033A770) << 6) + 0x8033a778)
+    if obj.b_0x18 == ubyte(word(0x8032cf90) + 0x14):
+        if obj.transform:
+            fn80379f60(A0 = (short(0x8033a770) << 6) + 0x8033a7b8, A1 = obj.transform, A2 = (short(0x8033a770) << 6) + 0x8033a778)
         else:
             if (obj.gfxFlags & 0x4) != 0:
-                returnValue_c8 = fn80379798(A0 = (short(0X8033A770) << 6) + 0x8033a7b8, A1 = (short(0X8033A770) << 6) + 0x8033a778, A2 = obj + 32, A3 = short(word(0X8032CF9C) + 0x38))
+                fn80379798(A0 = (short(0x8033a770) << 6) + 0x8033a7b8, A1 = (short(0x8033a770) << 6) + 0x8033a778, A2 = obj + 0x20, A3 = short(word(0x8032cf9c) + 0x38))
             else:
-                returnValue_e4 = fn80379440(A0 = SP + -64, A1 = obj + 32, A2 = obj + 26)
-                returnValue_10c = fn80379f60(A0 = (short(0X8033A770) << 6) + 0x8033a7b8, A1 = SP + -64, A2 = (short(0X8033A770) << 6) + 0x8033a778)
-        returnValue_13c = fn8037a29c(A0 = (short(0X8033A770) << 6) + 0x8033a7b8, A1 = (short(0X8033A770) << 6) + 0x8033a7b8, A2 = obj + 44)
-        short(0X8033A770) = ((short(0X8033A770) + 1) << 16) >a 16
-        obj.transform = ((((short(0X8033A770) + 1) << 16) >a 16) << 6) + 0x8033a778
-        obj.posOffset.x = single((short(0X8033A770) << 0x6) + 0x8033a7a8)
-        obj.posOffset.y = single((short(0X8033A770) << 0x6) + 0x8033a7ac)
-        obj.posOffset.z = single((short(0X8033A770) << 0x6) + 0x8033a7b0)
-        if obj._0x3c != 0:
-            returnValue_1f8 = fn8027c988(A0 = obj + 56, A1 = (obj.gfxFlags & 0x20) < 0)
-        returnValue_218 = fn8027cf68(A0 = obj, A1 = (short(0X8033A770) << 6) + 0x8033a778)
+                fn80379440(A0 = SP + -0x40, A1 = obj + 0x20, A2 = obj + 0x1a)
+                fn80379f60(A0 = (short(0x8033a770) << 6) + 0x8033a7b8, A1 = SP + -0x40, A2 = (short(0x8033a770) << 6) + 0x8033a778)
+        fn8037a29c(A0 = (short(0x8033a770) << 6) + 0x8033a7b8, A1 = (short(0x8033a770) << 6) + 0x8033a7b8, A2 = obj + 0x2c)
+        short(0x8033a770) = ((short(0x8033a770) + 1) << 0x10) >a 0x10
+        obj.transform = ((((short(0x8033a770) + 0x1) << 0x10) >a 0x10) << 0x6) + 0x8033a778
+        obj.posOffset.x = single((short(0x8033a770) << 0x6) + 0x8033a7a8)
+        obj.posOffset.y = single((short(0x8033a770) << 0x6) + 0x8033a7ac)
+        obj.posOffset.z = single((short(0x8033a770) << 0x6) + 0x8033a7b0)
+        if obj.w_0x3c != 0:
+            fn8027c988(A0 = obj + 0x38, A1 = (obj.gfxFlags & 0x20) < 0)
+        returnValue_218 = fn8027cf68(A0 = obj, A1 = (short(0x8033a770) << 6) + 0x8033a778)
         if returnValue_218 != 0:
-            returnValue_228 = fn8027897c(A0 = 64)
-            returnValue_24c = fn8037a434(A0 = returnValue_228, A1 = (short(0X8033A770) << 6) + 0x8033a778)
-            word((short(0X8033A770) << 0x2) + 0x8033af78) = returnValue_228
-            if obj._0x14 != 0:
-                word(0X8032CFA0) = obj
-                word(obj._0x14 + 0xc) = obj
-                returnValue_29c = fn8027d8f8(A0 = obj._0x14)
-                word(obj._0x14 + 0xc) = 0
-                word(0X8032CFA0) = 0
-            if obj.gfxChild != 0:
-                returnValue_2cc = fn8027d8f8(A0 = obj.gfxChild)
-        short(0X8033A770) = short(0X8033A770) + -1
-        byte(0X8033B008) = 0
-        obj.transform = 0
+            returnValue_228 = fn8027897c(A0 = 0x40)
+            fn8037a434(A0 = returnValue_228, A1 = (short(0x8033a770) << 6) + 0x8033a778)
+            word((short(0x8033a770) << 0x2) + 0x8033af78) = returnValue_228
+            if obj.w_0x14 != 0:
+                word(0x8032cfa0) = obj
+                word(obj.w_0x14 + 0xc) = obj
+                fn8027d8f8(A0 = obj.w_0x14)
+                word(obj.w_0x14 + 0xc) = 0
+                word(0x8032cfa0) = 0
+            if obj.gfxChild:
+                fn8027d8f8(A0 = obj.gfxChild)
+        short(0x8033a770) = short(0x8033a770) + -1
+        byte(0x8033b008) = 0
+        obj.transform = None
     return V0
 ```
 which, y'know, could be *less* readable.
