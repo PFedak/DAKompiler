@@ -41,6 +41,8 @@ def getCode(t):
         short  : 'h',
         ushort : 'H',
         byte   : 'b',
-        ubyte  : 'B'
+        ubyte  : 'B',
+        single : 'f',
+        double : 'd'
     }
     return codeTable[t] if isinstance(t, Primitive) else 'p'

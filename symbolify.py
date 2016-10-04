@@ -54,8 +54,8 @@ class Symbol(Symbolic):
         self.name = sym
         self.type = d
         
-    def resolve(self, dt):
-        return self if dt == basicTypes.Pointer else Expression.build('@',dt.name,self.name)
+    def negated(self):
+        return Symbol('not {}'.format(self))    # not a good solution
 
     def toHex(self):
         return self
@@ -98,6 +98,11 @@ class Expression(Symbolic):
         except:
             print('error formatting', repr(self))
             raise
+
+    def negated(self):
+        if self.type == basicTypes.boolean:
+            return Expression(Expression.logicOpposite[self.op], self.args, self.type)
+        raise Exception("Can't negate non-logical expression")
 
     def __repr__(self):
         return "Expression({}, {})".format(self.op, ', '.join(repr(a) for a in self.args))
@@ -335,9 +340,9 @@ conversionList = {
     CopOp.MFC: MFC_python,
     CopOp.MTC: MTC_python,
     CopOp.BCF: lambda instr,history: (InstrResult.branch, history.read(SpecialRegister.Compare), extend(instr.target)),
-    CopOp.BCT: lambda instr,history: (InstrResult.branch, Expression.build('!', history.read(SpecialRegister.Compare)), extend(instr.target)),
+    CopOp.BCT: lambda instr,history: (InstrResult.branch, history.read(SpecialRegister.Compare).negated(), extend(instr.target)),
     CopOp.BCFL: lambda instr,history: (InstrResult.likely, history.read(SpecialRegister.Compare), extend(instr.target)),
-    CopOp.BCTL: lambda instr,history: (InstrResult.likely, Expression.build('!', history.read(SpecialRegister.Compare)), extend(instr.target)),
+    CopOp.BCTL: lambda instr,history: (InstrResult.likely, history.read(SpecialRegister.Compare).negated(), extend(instr.target)),
     CopOp.CFC: lambda instr,regs: None,
     CopOp.CTC: lambda instr,regs: None,
 
