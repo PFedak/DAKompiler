@@ -1,10 +1,8 @@
 import struct
 import itertools
-from enum import Enum
-from collections import namedtuple, defaultdict
+from collections import defaultdict
 from functools import reduce
 
-import basicTypes 
 from instruction import *
 
 class Literal:
