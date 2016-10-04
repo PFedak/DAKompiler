@@ -8,10 +8,10 @@ from pythonForm import renderFunctionToPython as render
 
 def chunks(seq, n):
     for lineNum in range(0, len(seq), n):
-        yield seq[lineNum:lineNum+n]
-        
+        yield seq[lineNum:lineNum + n]
+
 class RAMSnapshot:
-    def __init__(self, filename, startAddress, length = 0):
+    def __init__(self, filename, startAddress, length=0):
         with open(filename, 'rb') as f:
             if length > 0:
                 self.data = f.read(length)
@@ -19,37 +19,37 @@ class RAMSnapshot:
                 self.data = f.read()
         self.start = startAddress
         self.end = startAddress + len(self.data)
-    
+
 def findFunction(start, ram):
     """Produces the disassembly for the function starting at the given address"""
     loops = {}
     if start < ram.start or start >= ram.end:
-        raise Exception("function start address not found")     #function not in range 
+        raise Exception("function start address not found")  # function not in range
     current = start
     latest = start
-    for word in chunks(ram.data[start-ram.start:], 4):
-        if word == b'\x03\xe0\x00\x08' and latest <= current:   #JR RA
-            if ram.end > current + 8:   #do we have both JR RA and delay slot?
+    for word in chunks(ram.data[start - ram.start:], 4):
+        if word == b'\x03\xe0\x00\x08' and latest <= current:  # JR RA
+            if ram.end > current + 8:  # do we have both JR RA and delay slot?
                 return start, disassembleBlock(ram.data[start - ram.start:current + 8 - ram.start]), loops
             else:
                 return None
-        instr = struct.unpack('>L',word)[0]
+        instr = struct.unpack('>L', word)[0]
         if instruction.isBranch(instr):
-            target = 4 + 4*extend(instr & 0xffff)
+            target = 4 + 4 * extend(instr & 0xffff)
             if target < current:
-                loops[(target-start)//4] = (current-start)//4
+                loops[(target - start) // 4] = (current - start) // 4
             else:
                 latest = max(target, latest)
                 if latest >= ram.end:
                     return None
         current += 4
-    return None     #function did not end
-        
+    return None  # function did not end
+
 def disassembleBlock(data):
     """Converts binary data into MIPS"""
-    return [instruction.Instruction(w) for w in struct.unpack('>' + 'L'*(len(data)//4), data)]
-    
-def decompileFunction(ram, bindings, address, name = None, args = []):
+    return [instruction.Instruction(w) for w in struct.unpack('>' + 'L' * (len(data) // 4), data)]
+
+def decompileFunction(ram, bindings, address, name=None, args=[]):
     """"
         Produce Python code (roughly) equivalent to the specified function.
         
@@ -75,19 +75,19 @@ def decompileFunction(ram, bindings, address, name = None, args = []):
 def showDisassembly(ram, address):
     """Prints the disassembly of the function at address in ram"""
     mips = findFunction(address, ram)[1]
-    for i,x in enumerate(mips):
-        print(hex(4*i)[2:].zfill(3),x)
+    for i, x in enumerate(mips):
+        print(hex(4 * i)[2:].zfill(3), x)
 
 def showMIPSblock(ram, address, length):
     """Prints the disassembly of an arbitrary block
 
         length is the number of instructions
     """
-    mips = disassembleBlock(ram.data[addr-ram.start:addr-ram.start + 4*length])
-    for i,x in enumerate(mips):
-        print(hex(4*i + start)[2:].zfill(3),x)
+    mips = disassembleBlock(ram.data[addr - ram.start:addr - ram.start + 4 * length])
+    for i, x in enumerate(mips):
+        print(hex(4 * i + start)[2:].zfill(3), x)
 
 b = loadBindings('sm64 ram map.txt', 'J')
-marioRam = RAMSnapshot('marioRam',0x80000000)
-print(decompileFunction(marioRam, b, 0x802c8504, args = ['A0 objA Object', 'A1 objB Object']))
-print(decompileFunction(marioRam,b, 0x8027CF68, args = ['A0 obj Object', 'A1 transform AffineTransform']))
+marioRam = RAMSnapshot('marioRam', 0x80000000)
+print(decompileFunction(marioRam, b, 0x802c8504, args=['A0 objA Object', 'A1 objB Object']))
+print(decompileFunction(marioRam, b, 0x8027CF68, args=['A0 obj Object', 'A1 transform AffineTransform']))

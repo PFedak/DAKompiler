@@ -21,7 +21,7 @@ def clean(line):
     return indent, line.split()
 
 class MismatchError(Exception):
-    def __init__(data, shouldbe, found):
+    def __init__(self, data, shouldbe, found):
         self.data = data
         self.should = shouldbe
         self.found = found
