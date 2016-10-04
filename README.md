@@ -73,7 +73,7 @@ which, y'know, could be *less* readable.
 - [ ] Recognize loop types
 - [ ] Deal with JR and address tables
 - [ ] Be more careful about types (maybe support C-style output)
-- [ ] Deal with branching more intelligently, allow for `elif`
+- [x] Deal with branching more intelligently, allow for `elif`
 - [ ] Add 'likely' branches
 - [ ] Add missing instructions (MULT, double precision math)
 - [ ] Recognize flag and enum values

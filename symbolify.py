@@ -396,6 +396,13 @@ class Branch(dict):
                     diff = ch
         return diff
 
+    def givenNot(self, badList):
+        drop = []
+        for br in badList:
+            if len(br) == 1:
+                drop.extend(br)
+        return self.without(drop)
+
     def without(self, avoid):
         return Branch({x:self[x] for x in self if x not in avoid}, self.line)
 
@@ -440,17 +447,14 @@ class Context:
                             newOnes = ones-1 if lower[index] else ones
                             byLenbyOnes[L-1][newOnes][lower.without([index])] = False
                     if not byLenbyOnes[L][ones][lower]:
-                        found = False
-                        for upper in itertools.chain(byLenbyOnes[L-1][ones-1], byLenbyOnes[L-1][ones]):
-                            # check for previous merges this falls under
-                            if upper.implies(lower):
-                                found = True
-                                break
-                        if not found:
-                            prime.add(lower)
-                    
-        #TODO actually finish the algorithm
-        self.cnf = list(prime)
+                        prime.add(lower)
+        if len(prime) == 1:
+            self.cnf = list(prime)
+        else:
+            prime = sorted(prime, key = lambda x:(min(x), len(x)))
+            self.cnf = []
+            for br in prime:
+                self.cnf.append(br.givenNot(self.cnf))
 
     def implies(self, other):
         """Check if this context implies the other one, and if so return the relative conditions"""
@@ -476,6 +480,14 @@ class Context:
             if [t for t in other.cnf if base.isCompatibleWith(t)]:
                 return True
         return False
+
+    def processElif(self, badList):
+        """What parts of this matter, given that other is NOT true"""
+        dropped = [br.without(badList) for br in self.cnf]
+        for br in dropped:
+            if len(br) == 1:
+                badList.extend(br)
+        return Context(dropped)
 
     def isTrivial(self):
         return len(self.cnf) == 1 and not self.cnf[0]
@@ -690,6 +702,8 @@ class CodeBlock:
         self.parent = parent
         self.relative = relative
         self.children = []
+        self.elifAccumulator = []
+        self.elseRelative = None
 
 def makeSymbolic(name, mipsData, bindings, arguments = []):
     """Produce symbolic representation of the logic of a MIPS function"""
@@ -711,6 +725,7 @@ def makeSymbolic(name, mipsData, bindings, arguments = []):
 
     for lineNum, instr in enumerate(mips):
         if lineNum in updates:
+            # different set of active branches, start a new block of code
             newContext = Context([b for b in branchList if 0 <= b.line <= lineNum], lineNum)
             newParent = currBlock
             while True:
@@ -720,6 +735,11 @@ def makeSymbolic(name, mipsData, bindings, arguments = []):
                 else:
                     newParent = newParent.parent
             currBlock = CodeBlock(newContext, newParent, rel)
+            # continue an elif chain, or start a new one
+            if newParent.children and not rel.isCompatibleWith(newParent.children[-1].relative):
+                currBlock.elseRelative = rel.processElif(newParent.elifAccumulator)
+            else:
+                newParent.elifAccumulator = [list(br)[0] for br in rel.cnf if len(br) == 1]
             newParent.children.append(currBlock)
             history.now = newContext
             #TODO prune now-irrelevant choices from branches so this doesn't take forever on long functions

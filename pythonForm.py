@@ -38,26 +38,30 @@ def renderToPython(codeTree, booleans, level = 0):
         result = renderList[line[0]](*line[1:])
         if result:
             text.append((indent*level)+result)
-    previousRelative = Context()
     for block in codeTree.children:
         if block.relative.isTrivial():
             newLevel = level
             prefix = None
         else:
             newLevel = level + 1
-            keyword = '{}if {}:' if block.relative.isCompatibleWith(previousRelative) else '{}elif {}:'
+            if block.elseRelative:
+                keyword = '{}else:' if block.elseRelative.isTrivial() else '{}elif {}:'
+                toShow = block.elseRelative
+            else:
+                keyword = '{}if {}:'
+                toShow = block.relative
+
             prefix = keyword.format(indent*level, 
                     ' or '.join(
                         ' and '.join(
                             ('{}' if val else '{:!}').format(booleans[ch]) for ch, val in br.items()
                         )
-                    for br in block.relative.cnf)
+                    for br in toShow.cnf)
                 )
         inner = renderToPython(block, booleans, newLevel)
         if inner:
             if prefix:
                 text.append(prefix)
             text.extend(inner)
-            previousRelative = block.relative
     return text
 

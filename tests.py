@@ -17,6 +17,16 @@ class TestContexts(unittest.TestCase):
         self.assertEqual(len(rel.cnf[0]), 1)
         self.assertEqual(rel.cnf[0][1], True)
 
+    def test_smallMerge(self):
+        zero = symbolify.Branch().branchOff(0,True)
+        one = symbolify.Branch().branchOff(0,False).branchOff(1,True)
+        two = symbolify.Branch().branchOff(0,False).branchOff(1,False).branchOff(2,True)
+        either = Context([zero, one, two])
+        self.assertEqual(len(either.cnf), 3)
+        self.assertEqual(len(either.cnf[0]), 1)
+        self.assertEqual(len(either.cnf[1]), 1)
+        self.assertEqual(len(either.cnf[2]), 1)
+
     def test_completeMerge(self):
         for L in range(3,8):
             base = []
