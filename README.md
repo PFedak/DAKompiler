@@ -3,9 +3,9 @@ a ~~simple~~ needlessly complicated mips decompiler
 
 ## Basic usage
 This decompiler doesn't target a particular version of MIPS, mostly because
-I haven't implemented many opcodes that would have to differ by version. 
+I haven't implemented many opcodes that would have to differ by version. Nor does it try to accurately decompile arbitrary MIPS; I'm targeting code that was written by a non-very-aggressive compiler, which seems to be enough for most game logic in Super Mario 64.
 
-Python 3(.4ish?) required, no plans to implement a command line interface mostly 
+Python >= 3.4 required, no plans to implement a command line interface mostly 
 because I've found this to be a rather interactive process most of the time.
 
 Load a 'bindings' object from a ram map file via
@@ -19,7 +19,7 @@ You'll also need binary data, either a dump of the game's RAM at some point or t
 ```
 marioRam = RAMSnapshot('marioRam', 0x80000000)
 ```
-the number is the address the binary data starts at, so that later you can use absolut addresses.
+the number is the address the binary data starts at, so that later you can use absolute addresses.
 
 Access the main functionality through
 ```
@@ -83,7 +83,7 @@ which, y'know, could be *less* readable.
 - [ ] Simplify shift-based multiply-by-constant stuff
 - [ ] Support for += etc.
 - [ ] Other output options, like assembly offsets
-- [ ] Display absolut branch destinations in mips instead of relative
+- [ ] Display absolute branch destinations in mips instead of relative
 - [ ] Handle functions that return a value more cleverly
 - [ ] Make output formatting more extensible, all in its own `languageForm` file
 
