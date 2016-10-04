@@ -4,7 +4,6 @@ from instruction import Register, FloatRegister
 from collections import namedtuple
 
 verboseFileLoading = True
-undefinedTypes = set()
 
 def clean(line):
     indent = 0
@@ -75,15 +74,18 @@ def simpleType(bindings, typeString):
         return basicTypes.Primitive.lookup[typeString], None
     except:
         try:
-            flagType = {'Bflag':basicTypes.ubyte, 'Hflag':basicTypes.ushort, 'Wflag':basicTypes.word}
-            newFlag = basicTypes.Flag(flagType[typeString], {})
+            flagType = {'bflag':basicTypes.ubyte, 'hflag':basicTypes.ushort, 'wflag':basicTypes.word}
+            newFlag = basicTypes.Flag(flagType[typeString.lower()], {})
             return newFlag, (newFlag, flagBit)
         except:
-            global undefinedTypes
-            canon = typeString.lower()
-            if (canon not in bindings['enums']) and (canon not in bindings['structs']):
-                undefinedTypes.add(canon)
-            return canon, None
+            canon = typeString.lower().split()
+            if canon[0] == 'enum':
+                if canon[1] not in bindings['enums']:
+                    bindings['undefined'].add(canon[1])
+                return basicTypes.EnumInstance(canon[1]), None           
+            if canon[0] not in bindings['structs']:
+                bindings['undefined'].add(canon[0])
+            return canon[0], None
 
 def flagBit(tokens, curr, bindings):
     curr.bits[int(tokens[0],  16)] = tokens[1]
@@ -118,7 +120,7 @@ def enums(tokens, curr, bindings):
     canon = tokens[0].lower()
     if canon not in curr:
         curr[canon] = basicTypes.EnumType(tokens[0], simpleType(bindings, tokens[1])[0], {})
-        undefinedTypes.discard(canon)
+        bindings['undefined'].discard(canon)
     return curr[canon], enumValue
 
 def enumValue(tokens, curr, bindings):
@@ -158,7 +160,7 @@ def structs(tokens, curr, bindings):
     canon = tokens[0].lower()
     if canon not in curr:
         curr[canon] = basicTypes.StructType(tokens[0], int(tokens[1],16), {})
-        undefinedTypes.discard(canon)
+        bindings['undefined'].discard(canon)
         if len(tokens) == 3:
             curr[canon].members.update(curr[tokens[2].lower()].members)
     return curr[canon], members
@@ -172,7 +174,7 @@ def loadBindings(filename, region = None, bindings = None, verbose = True):
     global verboseFileLoading
     verboseFileLoading = verbose
     if not bindings:
-        bindings = {'functions':{}, 'globals':{}, 'structs':{}, 'enums':{}, 'trigtables':{}}
+        bindings = {'functions':{}, 'globals':{}, 'structs':{}, 'enums':{}, 'trigtables':{}, 'undefined':set()}
     if 'region' in bindings:
         if region and bindings['region'] != region:
             raise MismatchError('region', bindings['region'], region)
@@ -222,10 +224,9 @@ def loadBindings(filename, region = None, bindings = None, verbose = True):
                 verbosePrint('error parsing',' '.join(tokens))
                 raise
 
-    global undefinedTypes
-    if undefinedTypes:
+    if bindings['undefined']:
         verbosePrint('the following types are still undefined:')
-        for t in undefinedTypes:
+        for t in bindings['undefined']:
             verbosePrint('\t'+t)
     return bindings
 

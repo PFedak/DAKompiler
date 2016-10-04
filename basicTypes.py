@@ -4,6 +4,7 @@ Pointer = namedtuple('Pointer', 'pointedType target')
 Array = namedtuple('Array', 'pointedType length')
 Stack = namedtuple('Stack', 'offset')
 StructType = namedtuple('StructType', 'name size members')
+EnumInstance = namedtuple('EnumInstance', 'enum')
 EnumType = namedtuple('EnumType', 'name base values')
 Flag = namedtuple('Flag', 'base bits')
 FunctionSignature = namedtuple('FunctionSignature', 'name args')
@@ -46,3 +47,6 @@ def getCode(t):
         double : 'd'
     }
     return codeTable[t] if isinstance(t, Primitive) else 'p'
+
+def isAddressable(t):
+    return isinstance(t, Pointer) or isinstance(t, Array) or isinstance(t, str)

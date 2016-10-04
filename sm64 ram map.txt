@@ -1,6 +1,5 @@
 version     1.0                 
 rom         Super Mario 64      #exact spacing and case are ignored
-region      J                   
 
 # all numbers are hex
 
@@ -38,7 +37,7 @@ structs
         3c      one             single
 
     Triangle            30
-        0       type            TriangleType
+        0       type            enum TriangleType
         2       wind            short       #used for wind triangles, maybe others?
         4       flags           Bflag
             3           projectAlongX
@@ -54,7 +53,7 @@ structs
         2c      object          *Object
 
     gfxNode             14
-        00      gfxType         GFXtype
+        00      gfxType         enum GFXtype
         02      gfxFlags        Hflag
         04      gfxPrev         *gfxNode
         08      gfxNext         *gfxNode

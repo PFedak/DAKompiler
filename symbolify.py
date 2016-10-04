@@ -2,7 +2,7 @@ import struct
 import itertools
 from collections import defaultdict
 from functools import reduce
-
+import basicTypes
 from instruction import *
 
 class Literal:
@@ -91,7 +91,7 @@ class Expression(Symbolic):
         else:
             sep = ' {} '.format(self.op)
 
-        if 'h' in spec or self.op in '|&^':
+        if 'h' in spec or self.op in '|&^' or self.type == basicTypes.address:
             inner = '{:ph}'
         else:
             inner = '{:p}'
@@ -178,7 +178,16 @@ class Expression(Symbolic):
             if len(byType[False]) == 1:
                 return byType[False][0]
             else:
-                return Expression(op, byType[False], basicTypes.single if flop else basicTypes.word)
+                #multiple expressions summed
+                if flop:
+                    newType = basicTypes.single
+                else:
+                    newType = basicTypes.word
+                    for s in byType[False]:
+                        if basicTypes.isAddressable(s.type):
+                            newType = basicTypes.address
+                            break
+                return Expression(op, byType[False], newType)
         else:       #all literals, sum was zero, seems unlikely
             return Literal(0)
 
@@ -238,7 +247,7 @@ def loadMemory(datatype):
             #TODO account for more general reads (ie, just the lower bytes of a word)
             value = history.read(basicTypes.Stack(extend(instr.immediate)), datatype)  
         else:
-            address = Expression.build('+', history.read(instr.sourceReg, basicTypes.word), 
+            address = Expression.build('+', history.read(instr.sourceReg, basicTypes.address), 
                                             Literal(extend(instr.immediate)))
             value = history.lookupAddress(datatype, address)
         return InstrResult.register, history.write(instr.targetReg, value)
@@ -251,7 +260,7 @@ def storeMemory(datatype):
             return InstrResult.register, history.write(basicTypes.Stack(extend(instr.immediate)), value) 
         else:
             return InstrResult.write, value, history.lookupAddress(datatype, 
-                Expression.build('+', history.read(instr.sourceReg, basicTypes.word), 
+                Expression.build('+', history.read(instr.sourceReg, basicTypes.address), 
                                       Literal(extend(instr.immediate))))
     return foo
 
@@ -572,7 +581,7 @@ class VariableHistory:
         if isinstance(address, Literal):
             if address.value in self.bindings['globals']:
                 base = Symbol(*self.bindings['globals'][address.value])
-                if self.isAddressable(base.type):
+                if basicTypes.isAddressable(base.type):
                     return self.subLookup(fmt, base.name, base.type, 0)
                 else:
                     return base
@@ -590,11 +599,11 @@ class VariableHistory:
         if isinstance(address, Symbol):
             if isinstance(address.type, basicTypes.Pointer):
                 return Symbol(address.type.target if address.type.target else address.name, address.type.pointedType)
-            if self.isAddressable(address.type):
+            if basicTypes.isAddressable(address.type):
                 base = address
         elif address.op == '+':
             for term in address.args:
-                if self.isAddressable(term.type):
+                if basicTypes.isAddressable(term.type):
                     if base:
                         raise Exception('adding structs')
                     base = term
@@ -638,7 +647,7 @@ class VariableHistory:
             bestOffset = max(x for x in members if x <= address)
             base = Symbol(*members[bestOffset])
             if address < bestOffset + self.getSize(base.type):
-                if self.isAddressable(base.type):
+                if basicTypes.isAddressable(base.type):
                     return self.subLookup(fmt, '{}.{}'.format(prefix, base), base.type, address - bestOffset, others)
                 if not others:
                     #TODO account for reading the lower short of a word, etc.
@@ -674,18 +683,6 @@ class VariableHistory:
             if t in self.bindings['enums']:
                 return self.getSize(self.bindings['enums'][t].base)
         print('failed to size', t)
-
-    def isAddressable(self, t):
-        if isinstance(t, basicTypes.Primitive):
-            return False
-        if isinstance(t, basicTypes.Pointer) or isinstance(t, basicTypes.Array):
-            return True
-        if isinstance(t, str):
-            # assume anything unspecified is addressible
-            return t not in self.bindings['enums']
-        
-        #flags, anything else
-        return False
 
     @staticmethod
     def couldBeArg(var):
