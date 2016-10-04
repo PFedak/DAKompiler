@@ -34,11 +34,14 @@ class Literal:
 
 
     def __format__(self, spec):
+        if self.type == basicTypes.address and self.value == 0:
+            return 'None'
+
         topbyte = self.value >> 24
         if topbyte | 0x80 in [0xbf, 0xc0, 0xc1, 0xc2, 0xc3, 0xc4, 0xc5, 0xc6, 0xc7]:
             return str(struct.unpack('>f',self.value.to_bytes(4,byteorder='big'))[0])
 
-        if 'h' in spec or topbyte == 0x80:
+        if 'h' in spec or topbyte == 0x80 or self.type == basicTypes.address:
             return hex(self.value)
 
         # silly heuristic
@@ -141,6 +144,12 @@ class Expression(Symbolic):
         if op == '*' and left == right:
             return Expression('**', [left, Literal(2)], basicTypes.single if flop else basicTypes.word)
 
+        if op in ['==', '!='] and right == Literal(0):
+            if left.type == basicTypes.boolean:
+                return left if op == '!=' else left.negated()
+            if basicTypes.isAddressable(left.type):
+                return left
+
         if op in '+*|':
             return Expression.arithmeticMerge(op, left, right, flop)
         else:
@@ -148,11 +157,7 @@ class Expression(Symbolic):
 
         if op in '< > <= >= == !='.split():
             new.type = basicTypes.boolean
-            if left.type == basicTypes.boolean and right == Literal(0):
-                if op == '!=':
-                    return left
-                if op == '==':
-                    return Expression(Expression.logicOpposite[left.op], left.args)
+            
         return new
 
     @staticmethod
@@ -259,9 +264,12 @@ def storeMemory(datatype):
         if instr.sourceReg == Register.SP:
             return InstrResult.register, history.write(basicTypes.Stack(extend(instr.immediate)), value) 
         else:
-            return InstrResult.write, value, history.lookupAddress(datatype, 
-                Expression.build('+', history.read(instr.sourceReg, basicTypes.address), 
-                                      Literal(extend(instr.immediate))))
+            target = history.lookupAddress(datatype, Expression.build('+', 
+                                                        history.read(instr.sourceReg, basicTypes.address), 
+                                                        Literal(extend(instr.immediate))))
+            if basicTypes.isAddressable(target.type):
+                value.type = basicTypes.address
+            return InstrResult.write, value, target
     return foo
 
 def branchMaker(comp, withZero, likely = False):
@@ -533,6 +541,8 @@ class VariableHistory:
             self.write(reg, Symbol(showName, fmt))
 
     def read(self, var, fmt = basicTypes.unknown):
+        if var == Register.R0:  #zero is zero, shouldn't remember type info
+            return Literal(0)
         if var in self.states:
             uncertain = False
             for st in reversed(self.states[var]):
