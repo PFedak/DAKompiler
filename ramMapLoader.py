@@ -21,7 +21,7 @@ def clean(line):
     return indent, line.split()
 
 class MismatchError(Exception):
-    def __init__(data, shouldbe, found):
+    def __init__(self, data, shouldbe, found):
         self.data = data
         self.should = shouldbe
         self.found = found
@@ -44,7 +44,13 @@ def base(tokens, curr, bindings):
             else:
                 bindings['rom'] = name
     else:
-        parserList = {'structs':structs, 'functions':functions, 'globals':globalVars, 'enums':enums, 'trigtables':trig}
+        parserList = {
+            'structs'   : structs,
+            'functions' : functions,
+            'globals'   : globalVars,
+            'enums'     : enums,
+            'trigtables': trig
+            }
         try:
             new = bindings[category]
             if len(tokens) >= 2:    #check for a region specifier

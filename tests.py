@@ -62,7 +62,7 @@ class TestExpressions(unittest.TestCase):
     @unittest.skip('still figuring out how this should work')
     def test_flag(self):
         testFlags = basicTypes.Flag(basicTypes.short, {0:'zero', 1:'one', 2:'two'})
-        flagVar = Symbol('flags', testFlags)
+        flagVar = symbolify.Symbol('flags', testFlags)
         self.assertEqual('{}'.format(build('&', 'flags', Lit(2))), 'flags[one]')
         self.assertEqual('{}'.format(build('&', 'flags', Lit(5))), 'flags[zero] or flags[two]')
 
@@ -121,7 +121,7 @@ class TestStructLookup(unittest.TestCase):
 
     @unittest.expectedFailure
     def test_varArray(self):
-        address = Expression('+', [self.foo, build('<<',Sym('bar'), Lit(1)), Lit(8)])
+        address = symbolify.Expression('+', [self.foo, build('<<',Sym('bar'), Lit(1)), Lit(8)])
         self.assertEqual(self.history.lookupAddress(basicTypes.short, address), 'foo.array[bar]')
 
     def test_unknown(self):

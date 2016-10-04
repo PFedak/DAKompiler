@@ -57,19 +57,13 @@ class Symbol(Symbolic):
         self.type = d
         
     def resolve(self, dt):
-        if dt == basicTypes.pointer:
-            return self
-        else:
-            return Expression.build('@',dt.name,self.name)
+        return self if dt == basicTypes.Pointer else Expression.build('@',dt.name,self.name)
 
     def toHex(self):
         return self
 
     def __eq__(self,other):
-        if isinstance(other,Symbol):
-            return self.name == other.name
-        else:
-            return False
+        return isinstance(other,Symbol) and self.name == other.name
 
     def __format__(self, spec):
         return self.name
@@ -110,12 +104,23 @@ class Expression(Symbolic):
     def __repr__(self):
         return "Expression({}, {})".format(self.op, ', '.join(repr(a) for a in self.args))
 
-    opLambdas = {'+':lambda x,y:x+y, '*':lambda x,y:x*y, '-':lambda x,y:x-y, '/':lambda x,y:x/y, 
-        '>>':lambda x,y:x>>y, '<<':lambda x,y:x<<y, 
-        '|':lambda x,y:x|y, '^':lambda x,y:x^y, '&':lambda x,y:x&y
+    opLambdas = {
+        '+' : lambda x, y: x + y,
+        '*' : lambda x, y: x * y,
+        '-' : lambda x, y: x - y,
+        '/' : lambda x, y: x / y,
+        '>>': lambda x, y: x >> y,
+        '<<': lambda x, y: x << y,
+        '|' : lambda x, y: x | y,
+        '^' : lambda x, y: x ^ y,
+        '&' : lambda x, y: x & y
     }
 
-    opIdentities = {'+':0, '*':1, '|':0}
+    opIdentities = {
+        '+': 0,
+        '*': 1,
+        '|': 0
+    }
 
     @staticmethod
     def build(op, left, right, flop = False):
