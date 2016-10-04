@@ -6,9 +6,7 @@ def dummy(*args):
     return str(args)
 
 def renderReg(state):
-    if not state.explicit:
-        return None
-    return '{0.name} = {0.value}'.format(state)
+    return '{0.name} = {0.value}'.format(state) if state.explicit else None
 
 def renderFunc(title, args, val):
     return '{} = {}({})'.format(val, title, 
@@ -18,13 +16,15 @@ def renderWrite(value, target):
     return '{} = {}'.format(target, value)
 
 def renderReturn(value = None):
-    if value:
-        return 'return {}'.format(value)
-    else:
-        return None
+    return 'return {}'.format(value) if value else None
 
-renderList = {IR.register:renderReg, IR.write:renderWrite, IR.function:renderFunc, 
-                IR.end:renderReturn, IR.unhandled:lambda i:str(i)}
+renderList = {
+    IR.register : renderReg,
+    IR.write    : renderWrite,
+    IR.function : renderFunc,
+    IR.end      : renderReturn,
+    IR.unhandled: str
+    }
 
 def renderFunctionToPython(name, codeTree, history, booleans):
     text = ['def {}({}):'.format(name,', '.join(history.states[arg][0].value.name for arg in history.argList))]
@@ -44,10 +44,7 @@ def renderToPython(codeTree, booleans, level = 0):
             prefix = None
         else:
             newLevel = level + 1
-            if block.relative.isCompatibleWith(previousRelative):
-                keyword = '{}if {}:'
-            else:
-                keyword = '{}elif {}:'
+            keyword = '{}if {}:' if block.relative.isCompatibleWith(previousRelative) else '{}elif {}:'
             prefix = keyword.format(indent*level, 
                     ' or '.join(
                         ' and '.join(

@@ -278,8 +278,6 @@ def isBranch(instr):
     except:
         pass
     if op == 1:
-        return ((instr >> 16) & 0x1f) in [0,1,2,3]
-    elif op == 16 and (instr>>21) & 0x1f == 8:
-        return True
-    return False
-        
+        return ((instr >> 16) & 0x1f) in [0, 1, 2, 3]
+    else:
+        return op == 16 and (instr >> 21) & 0x1f == 8

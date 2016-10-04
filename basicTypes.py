@@ -32,8 +32,15 @@ single = Primitive('single' ,4)
 double = Primitive('double', 8)
 
 def getCode(t):
-    codeTable = {unknown:'', bad:'x', boolean:'?', word:'w', address:'p', 
-                short:'h', ushort:'H', byte:'b', ubyte:'B'}
-    if isinstance(t, Primitive):
-        return codeTable[t]
-    return 'p'
+    codeTable = {
+        unknown: '',
+        bad    : 'x',
+        boolean: '?',
+        word   : 'w',
+        address: 'p',
+        short  : 'h',
+        ushort : 'H',
+        byte   : 'b',
+        ubyte  : 'B'
+    }
+    return codeTable[t] if isinstance(t, Primitive) else 'p'
