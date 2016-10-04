@@ -173,7 +173,7 @@ class Expression(Symbolic):
                 return byType[False][0]
             else:
                 return Expression(op, byType[False], basicTypes.single if flop else basicTypes.word)
-        else:       #all literals, sum was zero, seems unlikely but ¯\_(ツ)_/¯
+        else:       #all literals, sum was zero, seems unlikely
             return Literal(0)
 
 def extend(const):
@@ -184,32 +184,40 @@ def extend(const):
 
 def assignReg(w, fmt ,op):
     def foo(instr, history):
+        value = get_value(history, instr)
+        toWrite = get_toWrite(instr)
+        return (InstrResult.register, history.write(toWrite, value))
+
+    def get_toWrite(instr):
+        if w == 'T':
+            return instr.targetReg
+        elif w == 'D':
+            return instr.destReg
+        elif w == 'F':
+            return instr.fd
+        elif w == 'C':
+            return SpecialRegister.Compare
+        raise Error("Bad w")
+
+    def get_value(history, instr):
         if fmt == 'S+xI':
-            value = Expression.build(op, history.read(instr.sourceReg), Literal(instr.immediate))
+            return Expression.build(op, history.read(instr.sourceReg), Literal(instr.immediate))
         elif fmt == 'S+I':
-            value = Expression.build(op, history.read(instr.sourceReg), Literal(extend(instr.immediate)))
+            return Expression.build(op, history.read(instr.sourceReg), Literal(extend(instr.immediate)))
         elif fmt == 'f(I)':
-            value = Literal(op(instr.immediate))
+            return Literal(op(instr.immediate))
         elif fmt == 'F+F':
-            value = Expression.build(op, history.read(instr.fs), history.read(instr.ft), flop = True)
+            return Expression.build(op, history.read(instr.fs), history.read(instr.ft), flop=True)
         elif fmt == '@F':
             if op == 'id':
-                value = history.read(instr.fs)
+                return history.read(instr.fs)
             else:
-                value = Expression.build('@', op, history.read(instr.fs))
+                return Expression.build('@', op, history.read(instr.fs))
         elif fmt == 'T<<A':
-            value = Expression.build(op,history.read(instr.targetReg),Literal(instr.shift))
+            return Expression.build(op, history.read(instr.targetReg), Literal(instr.shift))
         elif fmt == 'S+T':
-            value = Expression.build(op,history.read(instr.sourceReg),history.read(instr.targetReg))
-        if w == 'T':
-            toWrite = instr.targetReg
-        elif w == 'D':
-            toWrite = instr.destReg
-        elif w == 'F':
-            toWrite = instr.fd
-        elif w == 'C':
-            toWrite = SpecialRegister.Compare
-        return (InstrResult.register, history.write(toWrite, value))
+            return Expression.build(op, history.read(instr.sourceReg), history.read(instr.targetReg))
+        raise Error("Bad format")
 
     return foo
 
