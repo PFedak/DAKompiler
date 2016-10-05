@@ -79,10 +79,11 @@ class Expression(Symbolic):
 
     logicOpposite = {'==':'!=', '!=':'==', '>':'<=', '<':'>=', '<=':'>', '>=':'<'}
 
-    def __init__(self, op, args, fmt = basicTypes.unknown):
+    def __init__(self, op, args, fmt = basicTypes.unknown, constant = None):
         self.op = op
         self.args = args
         self.type = fmt
+        self.constant = constant
 
     def __format__(self, spec):
         if self.op == '@':
@@ -98,9 +99,10 @@ class Expression(Symbolic):
             inner = '{:ph}'
         else:
             inner = '{:p}'
-
+            
         try:
-            return ('({})' if 'p' in spec else '{}').format(sep.join(inner.format(a) for a in self.args))
+            return ('({}{})' if 'p' in spec else '{}{}').format(sep.join(inner.format(a) for a in self.args),
+                                                '{{}}{}'.format(inner).format(sep,self.constant) if self.constant else '')
         except:
             print('error formatting', repr(self))
             raise
@@ -111,7 +113,8 @@ class Expression(Symbolic):
         raise Exception("Can't negate non-logical expression")
 
     def __repr__(self):
-        return "Expression({}, {})".format(self.op, ', '.join(repr(a) for a in self.args))
+        return "Expression({}, {}{})".format(self.op, ', '.join(repr(a) for a in self.args),
+                                                    '; {}'.format(self.constant) if self.constant else '')
 
     opLambdas = {
         '+' : lambda x, y: x + y,
@@ -134,6 +137,9 @@ class Expression(Symbolic):
     @staticmethod
     def build(op, left, right, flop = False):
 
+        if op == 'NOR':     #why is this a thing
+            return Expression('~',[Expression.build('|', left, right, flop)])
+
         if isinstance(left, Literal):
             if isinstance(right, Literal):
                 #two literals, completely reducible
@@ -142,16 +148,21 @@ class Expression(Symbolic):
         #left is not a literal, right may be
 
         if op == '*' and left == right:
-            return Expression('**', [left, Literal(2)], basicTypes.single if flop else basicTypes.word)
+            return Expression('**', [left], constant=Literal(2), fmt=basicTypes.single if flop else basicTypes.word)
 
-        if op in ['==', '!='] and right == Literal(0):
-            if left.type == basicTypes.boolean:
+        if op in ['==', '!='] and isinstance(right, Literal):
+            if left.type == basicTypes.boolean and right == 0:
                 return left if op == '!=' else left.negated()
-            if basicTypes.isAddressable(left.type):
+            if basicTypes.isAddressable(left.type) and right == 0:
                 return left
+            if isinstance(left.type, basicTypes.EnumInstance):
+                right.type = left.type
+
+        if op == '<<' and right.value < 8:
+            op, right = '*', Literal(2**right.value)
 
         if op in '+*|':
-            return Expression.arithmeticMerge(op, left, right, flop)
+            return Expression.arithmeticMerge(op, [left, right], flop)
         else:
             new = Expression(op, [left, right])
 
@@ -161,40 +172,37 @@ class Expression(Symbolic):
         return new
 
     @staticmethod
-    def arithmeticMerge(op, left, right, flop):
-        toMerge = []
-        if isinstance(left, Expression) and left.op == op:
-            toMerge.extend(left.args)
-        else:
-            toMerge.append(left)
-        if isinstance(right, Expression) and right.op == op:
-            toMerge.extend(right.args)
-        else:
-            toMerge.append(right)
-        #separate literal values to combine
-        byType = {True:[], False:[]}
-        for x in toMerge:
-            byType[isinstance(x,Literal)].append(x)
-        if byType[True]:
-            combined = Literal(reduce(Expression.opLambdas[op], [l.value for l in byType[True]]))
-            if combined.value != Expression.opIdentities[op]:
-                byType[False].append(combined)
-        if byType[False]:
-            if len(byType[False]) == 1:
-                return byType[False][0]
+    def arithmeticMerge(op, args, flop = False):
+        symbols = []
+        newConstant = Expression.opIdentities[op]
+        for a in args:
+            if isinstance(a, Expression) and a.op == op:
+                symbols.extend(a.args)
+                if a.constant:
+                    newConstant = Expression.opLambdas[op](newConstant, a.constant.value)
+            elif isinstance(a, Literal):
+                newConstant = Expression.opLambdas[op](newConstant, a.value)
+            else:
+                symbols.append(a)
+        newConstant = None if newConstant == Expression.opIdentities[op] else Literal(newConstant)
+        if symbols:     #in case I add symbolic cancellation later
+            if len(symbols) == 1 and not newConstant:
+                return symbols[0]
             else:
                 #multiple expressions summed
                 if flop:
                     newType = basicTypes.single
                 else:
                     newType = basicTypes.word
-                    for s in byType[False]:
+                    for s in symbols:
                         if basicTypes.isAddressable(s.type):
                             newType = basicTypes.address
                             break
-                return Expression(op, byType[False], newType)
-        else:       #all literals, sum was zero, seems unlikely
-            return Literal(0)
+                return Expression(op, symbols, constant=newConstant, fmt=newType)
+        elif newConstant:
+            return newConstant
+        else:
+            return Literal(Expression.opIdentities[op])
 
 def extend(const):
     if const < 0x8000:
@@ -342,6 +350,7 @@ conversionList = {
     RegOp.AND: assignReg('D','S+T','&'),
     RegOp.OR: assignReg('D','S+T','|'),
     RegOp.XOR: assignReg('D','S+T','^'),
+    RegOp.NOR: assignReg('D', 'S+T', 'NOR'),
     RegOp.SLT: assignReg('D','S+T','<'),
     RegOp.SLTU: assignReg('D','S+T','<'),
 
@@ -588,37 +597,30 @@ class VariableHistory:
             return True
 
     def lookupAddress(self, fmt, address):
-        if isinstance(address, Literal):
-            if address.value in self.bindings['globals']:
-                base = Symbol(*self.bindings['globals'][address.value])
-                if basicTypes.isAddressable(base.type):
-                    return self.subLookup(fmt, base.name, base.type, 0)
-                else:
-                    return base
-            bestOffset = max(x for x in self.bindings['globals'] if x <= address.value)
-            base = Symbol(*self.bindings['globals'][bestOffset])
-            relOffset = address.value - bestOffset
-            if relOffset >= self.getSize(base.type):
-                return Symbol('{}({:#010x})'.format(fmt, address.value), fmt)
+        if isinstance(address, Literal) and address.value in self.bindings['globals']:
+            base = Symbol(*self.bindings['globals'][address.value])
+            if basicTypes.isAddressable(base.type):
+                return self.subLookup(fmt, base.name, base.type, 0)
             else:
-                return self.subLookup(fmt, base.name, base.type, relOffset)
+                return base     
 
         base = None
         memOffset = 0
-        others = []            
+        others = []     
+        if isinstance(address, Literal):
+            memOffset = address.value       
         if isinstance(address, Symbol):
             if isinstance(address.type, basicTypes.Pointer):
                 return Symbol(address.type.target if address.type.target else address.name, address.type.pointedType)
             if basicTypes.isAddressable(address.type):
                 base = address
-        elif address.op == '+':
+        elif isinstance(address, Expression) and address.op == '+':
+            memOffset = address.constant.value if address.constant else 0
             for term in address.args:
                 if basicTypes.isAddressable(term.type):
                     if base:
                         raise Exception('adding structs')
                     base = term
-                elif isinstance(term, Literal):
-                    memOffset = term.value
                 else:
                     others.append(term)
 
@@ -630,6 +632,9 @@ class VariableHistory:
                     return Symbol('{}Table({})'.format(self.bindings['trigtables'][memOffset], angle))
                 except:
                     pass
+            pair = self.relativeToGlobals(memOffset)
+            if pair:
+                return self.subLookup(fmt, pair[0].name, pair[0].type, pair[1], others)
 
             # no idea what we are looking at, process it anyway
             return Symbol('{}({:h})'.format(fmt, address), fmt)
@@ -639,17 +644,40 @@ class VariableHistory:
         # determine which member struct we are trying to access
         return self.subLookup(fmt, base.name, base.type, memOffset, others)
 
-        
+    def relativeToGlobals(self, offset):
+        try:
+            bestOffset = max(x for x in self.bindings['globals'] if x <= offset)
+        except ValueError:
+            return None     # nothing less than this value
+
+        base = Symbol(*self.bindings['globals'][bestOffset])
+        relOffset = offset - bestOffset
+        if relOffset >= self.getSize(base.type):
+            return None
+        else:
+            return base, relOffset
+
     def subLookup(self, fmt, prefix, superType, address, others = []):
         """Recursively find data at the given address from the start of a type"""
         if isinstance(superType, basicTypes.Array):
+            index = Literal(address//self.getSize(superType.pointedType))
+            canIndex = True
             if others:
-                #TODO check the variable offset for multiplication/shift, and undo it
-                index = Expression('+', others + [Literal(address)])
-                return Symbol('{}({} + {:h})'.format(fmt, prefix, index), superType.pointedType)
+                for o in others:
+                    try:
+                        if o.op == '*' and o.constant.value == self.getSize(superType.pointedType):
+                            index = Expression.build('+', index, Expression.arithmeticMerge('*', o.args))
+                        else:
+                            canIndex = False
+                            break 
+                    except:
+                        canIndex = False
+                        break 
+            if canIndex:
+                return Symbol('{}[{}]'.format(prefix, index), superType.pointedType)
             else:
-                index = address//self.getSize(superType.pointedType)
-                return Symbol('{}[{:d}]'.format(prefix, index), superType.pointedType)
+                offset = Expression.arithmeticMerge('+', others + [Literal(address)])
+                return Symbol('{}({} + {:h})'.format(fmt, prefix, offset), superType.pointedType)
         if isinstance(superType, basicTypes.Pointer):
             return Symbol(superType.target if superType.target else prefix, superType.pointedType)
         if isinstance(superType, str) and superType in self.bindings['structs']:
@@ -793,12 +821,15 @@ def makeSymbolic(name, mipsData, bindings, arguments = []):
                         argList.append((argName, history.read(reg, fmt)))
                         history.markBad(reg)
                 else:
-                    title = 'fn%06x' % funcCall
+                    try:
+                        title = 'fn%06x' % funcCall
+                    except:
+                        title = funcCall
                     for reg in [Register.A0, FloatRegister.F12, Register.A1, FloatRegister.F14, Register.A2, Register.A3]:
                         if history.isValid(reg):
                             argList.append((reg.name, history.read(reg)))
                         history.markBad(reg)
-                    for s in (basicTypes.Stack(i) for i in range(0x10, 0x20, 4)):
+                    for s in (basicTypes.Stack(i) for i in range(0x10, 0x28, 4)):
                         if history.isValid(s):
                             argList.append(('stack_{:x}'.format(s.offset), history.read(s)))
                         else:

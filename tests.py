@@ -60,10 +60,15 @@ class TestExpressions(unittest.TestCase):
         bar = build('+', Sym('bar'), Lit(0))
         self.assertTrue(isinstance(bar, Sym))
         self.assertEqual('{}'.format(bar), 'bar')
-        #symbols are sent to the left
+        #constants are grouped and placed at the end
         together = build('+',three, bar)
         self.assertEqual('{}'.format(together),'bar + 3') 
         self.assertEqual('{}'.format(build('+',together,together)), 'bar + bar + 6')
+
+    def test_arithMerge(self):
+        rep = build('*', Sym('rep'), Lit(2))
+        cubed = symbolify.Expression.arithmeticMerge('*', [rep,rep,rep])
+        self.assertEqual('{}'.format(cubed), 'rep*rep*rep*8')
 
     def test_hexFormat(self):
         self.assertEqual('{:h}'.format(Lit(255)), '0xff')
@@ -129,10 +134,12 @@ class TestStructLookup(unittest.TestCase):
         self.assertEqual(self.history.lookupAddress(basicTypes.short, build('+',self.foo, Lit(0xc))).name, 'foo.array[0]')
         self.assertEqual(self.history.lookupAddress(basicTypes.short, build('+',self.foo, Lit(0xe))).name, 'foo.array[1]')
 
-    @unittest.expectedFailure
     def test_varArray(self):
-        address = symbolify.Expression('+', [self.foo, build('<<',Sym('bar'), Lit(1)), Lit(8)])
-        self.assertEqual(self.history.lookupAddress(basicTypes.short, address), 'foo.array[bar]')
+        address = symbolify.Expression('+', [self.foo, build('<<',Sym('bar'), Lit(1))], constant = Lit(0xc))
+        self.assertEqual(self.history.lookupAddress(basicTypes.short, address).name, 'foo.array[bar]')
+        newAddress = build('+', address, build('*',build('+',Sym('extra'), Lit(1)), Lit(2)))
+        self.assertEqual(self.history.lookupAddress(basicTypes.short, newAddress).name, 
+                            'foo.array[bar + extra + 1]')
 
     def test_unknown(self):
         self.assertEqual(self.history.lookupAddress(basicTypes.short, build('+',self.foo, Lit(8))).name, 'foo.h_0x8')
