@@ -24,7 +24,7 @@ renderList = {
     IR.write    : renderWrite,
     IR.function : renderFunc,
     IR.end      : renderReturn,
-    IR.unhandled: str
+    IR.unhandled: lambda x:'unhandled opcode: {}'.format(x)
     }
 
 def renderFunctionToPython(name, codeTree, history, booleans):
@@ -38,13 +38,14 @@ def renderToPython(codeTree, booleans, level = 0):
         result = renderList[line[0]](*line[1:])
         if result:
             text.append((indent*level)+result)
+    previousWasShown = False
     for block in codeTree.children:
         if block.relative.isTrivial():
             newLevel = level
             prefix = None
         else:
             newLevel = level + 1
-            if block.elseRelative:
+            if block.elseRelative and previousWasShown:
                 keyword = '{}else:' if block.elseRelative.isTrivial() else '{}elif {}:'
                 toShow = block.elseRelative
             else:
@@ -60,8 +61,11 @@ def renderToPython(codeTree, booleans, level = 0):
                 )
         inner = renderToPython(block, booleans, newLevel)
         if inner:
+            previousWasShown = True
             if prefix:
                 text.append(prefix)
             text.extend(inner)
+        else:
+            previousWasShown = False
     return text
 
