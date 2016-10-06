@@ -3,206 +3,8 @@ import itertools
 from collections import defaultdict
 from functools import reduce
 import basicTypes
+import algebra
 from instruction import *
-
-class Literal:
-    def __init__(self, x, h = False):
-        self.value = x
-        self.type = basicTypes.word
-        self.isHex = h
-
-    def __or__(self,other):
-        return Literal(self.value | other.value, self.isHex or other.isHex)
-
-    def __add__(self,other):
-        return Literal(self.value + other.value, self.isHex or other.isHex)
-
-    def __lshift__(self,other):
-        return Literal(self.value << other.value, self.isHex)
-
-    def __lt__(self,other):
-        return self.value < other
-
-    def __neg__(self):
-        return Literal(-self.value, self.isHex)
-
-    def __eq__(self, other):
-        try:
-            return self.value == other.value
-        except:
-            return self.value == other
-
-
-    def __format__(self, spec):
-        if self.type == basicTypes.address and self.value == 0:
-            return 'None'
-
-        topbyte = self.value >> 24
-        if topbyte | 0x80 in [0xbf, 0xc0, 0xc1, 0xc2, 0xc3, 0xc4, 0xc5, 0xc6, 0xc7]:
-            return str(struct.unpack('>f',self.value.to_bytes(4,byteorder='big'))[0])
-
-        if 'h' in spec or topbyte == 0x80 or self.type == basicTypes.address:
-            return hex(self.value)
-
-        # silly heuristic
-        h = hex(self.value)
-        d = str(self.value)
-        return h if (h.count('0')-1)/len(h) > d.count('0')/len(d) else d
-
-    def __repr__(self):
-        return 'Literal({:#x})'.format(self.value)
-
-class Symbolic:
-    pass
-
-class Symbol(Symbolic):
-    def __init__(self, sym, d = basicTypes.unknown):
-        self.name = sym
-        self.type = d
-        
-    def negated(self):
-        return Symbol('not {}'.format(self))    # not a good solution
-
-    def toHex(self):
-        return self
-
-    def __eq__(self,other):
-        return isinstance(other,Symbol) and self.name == other.name
-
-    def __format__(self, spec):
-        return self.name
-
-    def __repr__(self):
-        return 'Symbol({},{})'.format(self.name,self.type)
-    
-class Expression(Symbolic):
-
-    logicOpposite = {'==':'!=', '!=':'==', '>':'<=', '<':'>=', '<=':'>', '>=':'<'}
-
-    def __init__(self, op, args, fmt = basicTypes.unknown, constant = None):
-        self.op = op
-        self.args = args
-        self.type = fmt
-        self.constant = constant
-
-    def __format__(self, spec):
-        if self.op == '@':
-            return '{}({})'.format(self.args[0], self.args[1])
-        if '!' in spec and self.type == basicTypes.boolean:
-            sep = ' {} '.format(Expression.logicOpposite[self.op])
-        elif self.op in '* / **'.split():
-            sep = self.op
-        else:
-            sep = ' {} '.format(self.op)
-
-        if 'h' in spec or self.op in '|&^' or self.type == basicTypes.address:
-            inner = '{:ph}'
-        else:
-            inner = '{:p}'
-            
-        try:
-            return ('({}{})' if 'p' in spec else '{}{}').format(sep.join(inner.format(a) for a in self.args),
-                                                '{{}}{}'.format(inner).format(sep,self.constant) if self.constant else '')
-        except:
-            print('error formatting', repr(self))
-            raise
-
-    def negated(self):
-        if self.type == basicTypes.boolean:
-            return Expression(Expression.logicOpposite[self.op], self.args, self.type)
-        raise Exception("Can't negate non-logical expression")
-
-    def __repr__(self):
-        return "Expression({}, {}{})".format(self.op, ', '.join(repr(a) for a in self.args),
-                                                    '; {}'.format(self.constant) if self.constant else '')
-
-    opLambdas = {
-        '+' : lambda x, y: x + y,
-        '*' : lambda x, y: x * y,
-        '-' : lambda x, y: x - y,
-        '/' : lambda x, y: x / y,
-        '>>': lambda x, y: x >> y,
-        '<<': lambda x, y: x << y,
-        '|' : lambda x, y: x | y,
-        '^' : lambda x, y: x ^ y,
-        '&' : lambda x, y: x & y,
-    }
-
-    opIdentities = {
-        '+': 0,
-        '*': 1,
-        '|': 0
-    }
-
-    @staticmethod
-    def build(op, left, right, flop = False):
-
-        if op == 'NOR':     #why is this a thing
-            return Expression('~',[Expression.build('|', left, right, flop)])
-
-        if isinstance(left, Literal):
-            if isinstance(right, Literal):
-                #two literals, completely reducible
-                return Literal(Expression.opLambdas[op](left.value, right.value))
-            left, right = right, left
-        #left is not a literal, right may be
-
-        if op == '*' and left == right:
-            return Expression('**', [left], constant=Literal(2), fmt=basicTypes.single if flop else basicTypes.word)
-
-        if op in ['==', '!='] and isinstance(right, Literal):
-            if left.type == basicTypes.boolean and right == 0:
-                return left if op == '!=' else left.negated()
-            if basicTypes.isAddressable(left.type) and right == 0:
-                return left
-            if isinstance(left.type, basicTypes.EnumInstance):
-                right.type = left.type
-
-        if op == '<<' and right.value < 8:
-            op, right = '*', Literal(2**right.value)
-
-        if op in '+*|':
-            return Expression.arithmeticMerge(op, [left, right], flop)
-        else:
-            new = Expression(op, [left, right])
-
-        if op in '< > <= >= == !='.split():
-            new.type = basicTypes.boolean
-            
-        return new
-
-    @staticmethod
-    def arithmeticMerge(op, args, flop = False):
-        symbols = []
-        newConstant = Expression.opIdentities[op]
-        for a in args:
-            if isinstance(a, Expression) and a.op == op:
-                symbols.extend(a.args)
-                if a.constant:
-                    newConstant = Expression.opLambdas[op](newConstant, a.constant.value)
-            elif isinstance(a, Literal):
-                newConstant = Expression.opLambdas[op](newConstant, a.value)
-            else:
-                symbols.append(a)
-        newConstant = None if newConstant == Expression.opIdentities[op] else Literal(newConstant)
-        if symbols:     #in case I add symbolic cancellation later
-            if len(symbols) == 1 and not newConstant:
-                return symbols[0]
-            else:
-                #multiple expressions summed
-                if flop:
-                    newType = basicTypes.single
-                else:
-                    newType = basicTypes.word
-                    for s in symbols:
-                        if basicTypes.isAddressable(s.type):
-                            newType = basicTypes.address
-                            break
-                return Expression(op, symbols, constant=newConstant, fmt=newType)
-        elif newConstant:
-            return newConstant
-        else:
-            return Literal(Expression.opIdentities[op])
 
 def extend(const):
     if const < 0x8000:
@@ -229,23 +31,23 @@ def assignReg(w, fmt ,op):
 
     def get_value(history, instr):
         if fmt == 'S+xI':
-            return Expression.build(op, history.read(instr.sourceReg, basicTypes.word), Literal(instr.immediate))
+            return algebra.Expression.build(op, history.read(instr.sourceReg, basicTypes.word), algebra.Literal(instr.immediate))
         elif fmt == 'S+I':
-            return Expression.build(op, history.read(instr.sourceReg, basicTypes.word), Literal(extend(instr.immediate)))
+            return algebra.Expression.build(op, history.read(instr.sourceReg, basicTypes.word), algebra.Literal(extend(instr.immediate)))
         elif fmt == 'f(I)':
-            return Literal(op(instr.immediate))
+            return algebra.Literal(op(instr.immediate))
         elif fmt == 'F+F':
-            return Expression.build(op, history.read(instr.fs, basicTypes.single), 
+            return algebra.Expression.build(op, history.read(instr.fs, basicTypes.single), 
                                         history.read(instr.ft, basicTypes.single), flop=True)
         elif fmt == '@F':
             if op == 'id':
                 return history.read(instr.fs)
             else:
-                return Expression.build('@', op, history.read(instr.fs))
+                return algebra.Expression.build('@', op, history.read(instr.fs))
         elif fmt == 'T<<A':
-            return Expression.build(op, history.read(instr.targetReg), Literal(instr.shift))
+            return algebra.Expression.build(op, history.read(instr.targetReg), algebra.Literal(instr.shift))
         elif fmt == 'S+T':
-            return Expression.build(op, history.read(instr.sourceReg, basicTypes.word),
+            return algebra.Expression.build(op, history.read(instr.sourceReg, basicTypes.word),
                                         history.read(instr.targetReg, basicTypes.word))
         raise Error("Bad format")
 
@@ -260,24 +62,22 @@ def loadMemory(datatype):
             #TODO account for more general reads (ie, just the lower bytes of a word)
             value = history.read(basicTypes.Stack(extend(instr.immediate)), datatype)  
         else:
-            address = Expression.build('+', history.read(instr.sourceReg, basicTypes.address), 
-                                            Literal(extend(instr.immediate)))
+            address = algebra.Expression.build('+', history.read(instr.sourceReg, basicTypes.address), 
+                                            algebra.Literal(extend(instr.immediate)))
             value = history.lookupAddress(datatype, address)
         return InstrResult.register, history.write(instr.targetReg, value)
     return foo
 
 def storeMemory(datatype):
     def foo(instr, history):
-        value = history.read(instr.targetReg, datatype)
         if instr.sourceReg == Register.SP:
-            return InstrResult.register, history.write(basicTypes.Stack(extend(instr.immediate)), value) 
+            return InstrResult.register, history.write(basicTypes.Stack(extend(instr.immediate)),
+                                                        history.read(instr.targetReg, datatype)) 
         else:
-            target = history.lookupAddress(datatype, Expression.build('+', 
+            dest = history.lookupAddress(datatype, algebra.Expression.build('+', 
                                                         history.read(instr.sourceReg, basicTypes.address), 
-                                                        Literal(extend(instr.immediate))))
-            if basicTypes.isAddressable(target.type):
-                value.type = basicTypes.address
-            return InstrResult.write, value, target
+                                                        algebra.Literal(extend(instr.immediate))))
+            return InstrResult.write, history.read(instr.targetReg, dest.type), dest
     return foo
 
 def branchMaker(comp, withZero, likely = False):
@@ -285,7 +85,7 @@ def branchMaker(comp, withZero, likely = False):
         if instr.opcode == MainOp.BEQ and instr.sourceReg == instr.targetReg:
             return InstrResult.jump, None, extend(instr.immediate)
         return (InstrResult.likely if likely else InstrResult.branch, 
-                    Expression.build(comp, 
+                    algebra.Expression.build(comp, 
                         history.read(instr.sourceReg, basicTypes.word), 
                         history.read(Register.R0 if withZero else instr.targetReg, basicTypes.word)), 
                     extend(instr.immediate))
@@ -539,18 +339,25 @@ class VariableHistory:
         self.bindings = bindings
         self.argList = []           #arguments beyond the given ones
         self.now = Context([Branch()])
-        self.write(Register.R0, Literal(0))
-        self.write(Register.SP, Symbol('SP'))
-        self.write(Register.RA, Symbol('RA'))
-        self.write('CC', Symbol('bad_CC'))
+        self.write(Register.R0, algebra.Literal(0))
+        self.write(Register.SP, algebra.Symbol('SP'))
+        self.write(Register.RA, algebra.Symbol('RA'))
+        self.write('CC', algebra.Symbol('bad_CC'))
         for reg, name, fmt in args:
             showName = name if name else VariableHistory.getName(arg)
             self.argList.append(reg)
-            self.write(reg, Symbol(showName, fmt))
+            self.write(reg, algebra.Symbol(showName, fmt))
 
     def read(self, var, fmt = basicTypes.unknown):
+        """Retrive (an appropriate representation of) the value in a register and track its usage
+            
+            var should be a register or Stack() object
+
+            Depending on the expected format, the stored value may be altered substantially
+
+        """
         if var == Register.R0:  #zero is zero, shouldn't remember type info
-            return Literal(0)
+            return algebra.Literal(0)
         if var in self.states:
             uncertain = False
             for st in reversed(self.states[var]):
@@ -565,13 +372,13 @@ class VariableHistory:
                 elif self.now.isCompatibleWith(st.context):
                     st.explicit = True
                     uncertain = True
-            return Symbol(VariableHistory.getName(var), fmt)
+            return algebra.Symbol(VariableHistory.getName(var), fmt)
         else:
             symName = VariableHistory.getName(var)
             if VariableHistory.couldBeArg(var): 
                 self.argList.append(var)
                 symName = 'arg_' + symName
-            self.states[var].append(VariableState(self.getName(var), Symbol(symName, fmt), self.now))
+            self.states[var].append(VariableState(self.getName(var), algebra.Symbol(symName, fmt), self.now))
             return self.states[var][-1].value
         
 
@@ -580,7 +387,7 @@ class VariableHistory:
         return self.states[var][-1]
 
     def markBad(self, var):
-        self.write(var, Symbol('bad_%s' % VariableHistory.getName(var), basicTypes.bad))    
+        self.write(var, algebra.Symbol('bad_%s' % VariableHistory.getName(var), basicTypes.bad))    
 
     def isValid(self, var):
         """Determine if reading from the variable makes sense, mainly for function arguments"""
@@ -596,8 +403,8 @@ class VariableHistory:
             return True
 
     def lookupAddress(self, fmt, address):
-        if isinstance(address, Literal) and address.value in self.bindings['globals']:
-            base = Symbol(*self.bindings['globals'][address.value])
+        if isinstance(address, algebra.Literal) and address.value in self.bindings['globals']:
+            base = algebra.Symbol(*self.bindings['globals'][address.value])
             if basicTypes.isAddressable(base.type):
                 return self.subLookup(fmt, base.name, base.type, 0)
             else:
@@ -606,14 +413,14 @@ class VariableHistory:
         base = None
         memOffset = 0
         others = []     
-        if isinstance(address, Literal):
+        if isinstance(address, algebra.Literal):
             memOffset = address.value       
-        elif isinstance(address, Symbol):
+        elif isinstance(address, algebra.Symbol):
             if isinstance(address.type, basicTypes.Pointer):
-                return Symbol(address.type.target if address.type.target else address.name, address.type.pointedType)
+                return algebra.Symbol(address.type.target if address.type.target else address.name, address.type.pointedType)
             if basicTypes.isAddressable(address.type):
                 base = address
-        elif isinstance(address, Expression) and address.op == '+':
+        elif isinstance(address, algebra.Expression) and address.op == '+':
             memOffset = address.constant.value if address.constant else 0
             for term in address.args:
                 if basicTypes.isAddressable(term.type):
@@ -628,7 +435,7 @@ class VariableHistory:
             if fmt == basicTypes.single and memOffset in self.bindings['trigtables']:
                 try:
                     angle = others[0].args[0].args[0]
-                    return Symbol('{}Table({})'.format(self.bindings['trigtables'][memOffset], angle))
+                    return algebra.Symbol('{}Table({})'.format(self.bindings['trigtables'][memOffset], angle))
                 except:
                     pass
             pair = self.relativeToGlobals(memOffset)
@@ -636,7 +443,7 @@ class VariableHistory:
                 return self.subLookup(fmt, pair[0].name, pair[0].type, pair[1], others)
 
             # no idea what we are looking at, process it anyway
-            return Symbol('{}({:h})'.format(fmt, address), fmt)
+            return algebra.Symbol('{}({:h})'.format(fmt, address), fmt)
         if memOffset >= self.getSize(base.type):
             raise Exception('trying to look up address %#x in %s (only %#x bytes)' % (memOffset, base.type, self.getSize(base.type)))
 
@@ -649,7 +456,7 @@ class VariableHistory:
         except ValueError:
             return None     # nothing less than this value
 
-        base = Symbol(*self.bindings['globals'][bestOffset])
+        base = algebra.Symbol(*self.bindings['globals'][bestOffset])
         relOffset = offset - bestOffset
         if relOffset >= self.getSize(base.type):
             return None
@@ -659,13 +466,13 @@ class VariableHistory:
     def subLookup(self, fmt, prefix, superType, address, others = []):
         """Recursively find data at the given address from the start of a type"""
         if isinstance(superType, basicTypes.Array):
-            index = Literal(address//self.getSize(superType.pointedType))
+            index = algebra.Literal(address//self.getSize(superType.pointedType))
             canIndex = True
             if others:
                 for o in others:
                     try:
                         if o.op == '*' and o.constant.value == self.getSize(superType.pointedType):
-                            index = Expression.build('+', index, Expression.arithmeticMerge('*', o.args))
+                            index = algebra.Expression.build('+', index, algebra.Expression.arithmeticMerge('*', o.args))
                         else:
                             canIndex = False
                             break 
@@ -673,30 +480,30 @@ class VariableHistory:
                         canIndex = False
                         break 
             if canIndex:
-                return Symbol('{}[{}]'.format(prefix, index), superType.pointedType)
+                return algebra.Symbol('{}[{}]'.format(prefix, index), superType.pointedType)
             else:
-                offset = Expression.arithmeticMerge('+', others + [Literal(address)])
-                return Symbol('{}({} + {:h})'.format(fmt, prefix, offset), superType.pointedType)
+                offset = algebra.Expression.arithmeticMerge('+', others + [algebra.Literal(address)])
+                return algebra.Symbol('{}({} + {:h})'.format(fmt, prefix, offset), superType.pointedType)
         if isinstance(superType, basicTypes.Pointer):
-            return Symbol(superType.target if superType.target else prefix, superType.pointedType)
+            return algebra.Symbol(superType.target if superType.target else prefix, superType.pointedType)
         if isinstance(superType, str):
             try:
                 members = self.bindings['structs'][superType].members
                 bestOffset = max(x for x in members if x <= address)
-                base = Symbol(*members[bestOffset])
+                base = algebra.Symbol(*members[bestOffset])
                 if address < bestOffset + self.getSize(base.type):
                     if basicTypes.isAddressable(base.type):
                         return self.subLookup(fmt, '{}.{}'.format(prefix, base), base.type, address - bestOffset, others)
                     if not others:
                         #TODO account for reading the lower short of a word, etc.
-                        return Symbol('{}.{}'.format(prefix, base), base.type)
+                        return algebra.Symbol('{}.{}'.format(prefix, base), base.type)
             except:
                 pass    #unknown struct, nothing in max(), went too far
         # nothing matched
         if others:
-            return Symbol('{}({} + {:h})'.format(fmt, prefix, Expression.build('+', Expression('+',others), Literal(address))), fmt)
+            return algebra.Symbol('{}({} + {:h})'.format(fmt, prefix, algebra.Expression.build('+', algebra.Expression('+',others), algebra.Literal(address))), fmt)
         else:
-            return Symbol('{}.{}_{:#x}'.format(prefix, basicTypes.getCode(fmt), address), fmt)
+            return algebra.Symbol('{}.{}_{:#x}'.format(prefix, basicTypes.getCode(fmt), address), fmt)
 
     @staticmethod
     def getName(var):
@@ -838,7 +645,7 @@ def makeSymbolic(name, mipsData, bindings, arguments = []):
                         else:
                             break
                 
-                marker = Symbol('returnValue_{:x}'.format((lineNum - 1)*4))
+                marker = algebra.Symbol('returnValue_{:x}'.format((lineNum - 1)*4))
                 currBlock.code.append((InstrResult.function, title, argList, marker))
                 history.write(Register.V0, marker)
                 history.write(FloatRegister.F0, marker)

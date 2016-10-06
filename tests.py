@@ -1,6 +1,7 @@
 import unittest
 import basicTypes
 import symbolify
+import algebra
 
 Context = symbolify.Context
 
@@ -49,9 +50,9 @@ class TestContexts(unittest.TestCase):
             base.append(temp)
         self.assertTrue(Context(base).isTrivial())
        
-build = symbolify.Expression.build
-Lit = symbolify.Literal
-Sym = symbolify.Symbol
+build = algebra.Expression.build
+Lit = algebra.Literal
+Sym = algebra.Symbol
 
 class TestExpressions(unittest.TestCase):
     def test_adding(self):
@@ -67,7 +68,7 @@ class TestExpressions(unittest.TestCase):
 
     def test_arithMerge(self):
         rep = build('*', Sym('rep'), Lit(2))
-        cubed = symbolify.Expression.arithmeticMerge('*', [rep,rep,rep])
+        cubed = algebra.Expression.arithmeticMerge('*', [rep,rep,rep])
         self.assertEqual('{}'.format(cubed), 'rep*rep*rep*8')
 
     def test_hexFormat(self):
@@ -77,7 +78,7 @@ class TestExpressions(unittest.TestCase):
     @unittest.skip('still figuring out how this should work')
     def test_flag(self):
         testFlags = basicTypes.Flag(basicTypes.short, {0:'zero', 1:'one', 2:'two'})
-        flagVar = symbolify.Symbol('flags', testFlags)
+        flagVar = Sym('flags', testFlags)
         self.assertEqual('{}'.format(build('&', 'flags', Lit(2))), 'flags[one]')
         self.assertEqual('{}'.format(build('&', 'flags', Lit(5))), 'flags[zero] or flags[two]')
 
@@ -135,7 +136,7 @@ class TestStructLookup(unittest.TestCase):
         self.assertEqual(self.history.lookupAddress(basicTypes.short, build('+',self.foo, Lit(0xe))).name, 'foo.array[1]')
 
     def test_varArray(self):
-        address = symbolify.Expression('+', [self.foo, build('<<',Sym('bar'), Lit(1))], constant = Lit(0xc))
+        address = algebra.Expression('+', [self.foo, build('<<',Sym('bar'), Lit(1))], constant = Lit(0xc))
         self.assertEqual(self.history.lookupAddress(basicTypes.short, address).name, 'foo.array[bar]')
         newAddress = build('+', address, build('*',build('+',Sym('extra'), Lit(1)), Lit(2)))
         self.assertEqual(self.history.lookupAddress(basicTypes.short, newAddress).name, 
