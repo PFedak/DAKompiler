@@ -132,21 +132,21 @@ class Expression(Symbolic):
         '|': 0
     }
 
-    @staticmethod
-    def build(op, left, right, flop = False):
+    @classmethod
+    def build(cls, op, left, right, flop = False):
 
         if op == 'NOR':     #why is this a thing
-            return Expression('~',[Expression.build('|', left, right, flop)])
+            return cls('~',[cls.build('|', left, right, flop)])
 
         if isinstance(left, Literal):
             if isinstance(right, Literal):
                 #two literals, completely reducible
-                return Literal(Expression.opLambdas[op](left.value, right.value))
+                return Literal(cls.opLambdas[op](left.value, right.value))
             left, right = right, left
         #left is not a literal, right may be
 
         if op == '*' and left == right:
-            return Expression('**', [left], constant=Literal(2), fmt=basicTypes.single if flop else basicTypes.word)
+            return cls('**', [left], constant=Literal(2), fmt=basicTypes.single if flop else basicTypes.word)
 
         if op in ['==', '!='] and isinstance(right, Literal):
             if left.type == basicTypes.boolean and right == 0:
@@ -160,29 +160,29 @@ class Expression(Symbolic):
             op, right = '*', Literal(2**right.value)
 
         if op in '+*|':
-            return Expression.arithmeticMerge(op, [left, right], flop)
+            return cls.arithmeticMerge(op, [left, right], flop)
         else:
-            new = Expression(op, [left, right])
+            new = cls(op, [left, right])
 
         if op in '< > <= >= == !='.split():
             new.type = basicTypes.boolean
             
         return new
 
-    @staticmethod
-    def arithmeticMerge(op, args, flop = False):
+    @classmethod
+    def arithmeticMerge(cls, op, args, flop = False):
         symbols = []
-        newConstant = Expression.opIdentities[op]
+        newConstant = cls.opIdentities[op]
         for a in args:
-            if isinstance(a, Expression) and a.op == op:
+            if isinstance(a, cls) and a.op == op:
                 symbols.extend(a.args)
                 if a.constant:
-                    newConstant = Expression.opLambdas[op](newConstant, a.constant.value)
+                    newConstant = cls.opLambdas[op](newConstant, a.constant.value)
             elif isinstance(a, Literal):
-                newConstant = Expression.opLambdas[op](newConstant, a.value)
+                newConstant = cls.opLambdas[op](newConstant, a.value)
             else:
                 symbols.append(a)
-        newConstant = None if newConstant == Expression.opIdentities[op] else Literal(newConstant)
+        newConstant = None if newConstant == cls.opIdentities[op] else Literal(newConstant)
         if symbols:     #in case I add symbolic cancellation later
             if len(symbols) == 1 and not newConstant:
                 return symbols[0]
@@ -196,8 +196,8 @@ class Expression(Symbolic):
                         if basicTypes.isAddressable(s.type):
                             newType = basicTypes.address
                             break
-                return Expression(op, symbols, constant=newConstant, fmt=newType)
+                return cls(op, symbols, constant=newConstant, fmt=newType)
         elif newConstant:
             return newConstant
         else:
-            return Literal(Expression.opIdentities[op])
+            return Literal(cls.opIdentities[op])
