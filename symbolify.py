@@ -125,7 +125,7 @@ class Expression(Symbolic):
         '<<': lambda x, y: x << y,
         '|' : lambda x, y: x | y,
         '^' : lambda x, y: x ^ y,
-        '&' : lambda x, y: x & y
+        '&' : lambda x, y: x & y,
     }
 
     opIdentities = {
@@ -340,8 +340,7 @@ conversionList = {
     RegOp.SRL: assignReg('D','T<<A','>>'),
     RegOp.SRA: assignReg('D','T<<A','>a'),
     RegOp.JR: lambda instr, history: (InstrResult.end,) if instr.sourceReg == Register.RA else (InstrResult.unhandled, Expression.build('@','JR',history.read(instr.sourceReg))),
-    RegOp.JALR: lambda instr, history: (InstrResult.unhandled, 'JALR', 
-                                            history.read(instr.sourceReg, basicTypes.address)), 
+    RegOp.JALR: lambda instr, history: (InstrResult.function, '{}'.format(history.read(instr.sourceReg, basicTypes.address))), 
     RegOp.ADD: assignReg('D','S+T','+'),
     RegOp.ADDU: assignReg('D','S+T','+'),
     RegOp.SUB: assignReg('D','S+T','-'),
@@ -609,7 +608,7 @@ class VariableHistory:
         others = []     
         if isinstance(address, Literal):
             memOffset = address.value       
-        if isinstance(address, Symbol):
+        elif isinstance(address, Symbol):
             if isinstance(address.type, basicTypes.Pointer):
                 return Symbol(address.type.target if address.type.target else address.name, address.type.pointedType)
             if basicTypes.isAddressable(address.type):
@@ -680,16 +679,19 @@ class VariableHistory:
                 return Symbol('{}({} + {:h})'.format(fmt, prefix, offset), superType.pointedType)
         if isinstance(superType, basicTypes.Pointer):
             return Symbol(superType.target if superType.target else prefix, superType.pointedType)
-        if isinstance(superType, str) and superType in self.bindings['structs']:
-            members = self.bindings['structs'][superType].members
-            bestOffset = max(x for x in members if x <= address)
-            base = Symbol(*members[bestOffset])
-            if address < bestOffset + self.getSize(base.type):
-                if basicTypes.isAddressable(base.type):
-                    return self.subLookup(fmt, '{}.{}'.format(prefix, base), base.type, address - bestOffset, others)
-                if not others:
-                    #TODO account for reading the lower short of a word, etc.
-                    return Symbol('{}.{}'.format(prefix, base), base.type)
+        if isinstance(superType, str):
+            try:
+                members = self.bindings['structs'][superType].members
+                bestOffset = max(x for x in members if x <= address)
+                base = Symbol(*members[bestOffset])
+                if address < bestOffset + self.getSize(base.type):
+                    if basicTypes.isAddressable(base.type):
+                        return self.subLookup(fmt, '{}.{}'.format(prefix, base), base.type, address - bestOffset, others)
+                    if not others:
+                        #TODO account for reading the lower short of a word, etc.
+                        return Symbol('{}.{}'.format(prefix, base), base.type)
+            except:
+                pass    #unknown struct, nothing in max(), went too far
         # nothing matched
         if others:
             return Symbol('{}({} + {:h})'.format(fmt, prefix, Expression.build('+', Expression('+',others), Literal(address))), fmt)
@@ -832,6 +834,7 @@ def makeSymbolic(name, mipsData, bindings, arguments = []):
                     for s in (basicTypes.Stack(i) for i in range(0x10, 0x28, 4)):
                         if history.isValid(s):
                             argList.append(('stack_{:x}'.format(s.offset), history.read(s)))
+                            history.markBad(s)
                         else:
                             break
                 
