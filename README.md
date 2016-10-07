@@ -80,7 +80,7 @@ which, y'know, could be *less* readable.
 
 ### Minor stuff
 - [ ] Process branches better so merging doesn't take forever
-- [ ] Simplify shift-based multiply-by-constant stuff
+- [x] Simplify shift-based multiply-by-constant stuff
 - [ ] Support for += etc.
 - [ ] Other output options, like assembly offsets
 - [ ] Display absolute branch destinations in mips instead of relative

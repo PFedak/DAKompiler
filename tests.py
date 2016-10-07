@@ -75,6 +75,14 @@ class TestExpressions(unittest.TestCase):
         self.assertEqual('{:h}'.format(Lit(255)), '0xff')
         self.assertEqual('{}'.format(build('|', Sym('x'), Lit(21))), 'x | 0x15')
 
+    def test_constantMultiply(self):
+        foo = Sym('foo')
+        timesFour = build('<<', foo, Lit(2))
+        timesFive = build('+', timesFour, foo)
+        timesForty = build('<<', timesFive, Lit(3))
+        timesThirtyNine = build('-', timesForty, foo)
+        self.assertEqual('{}'.format(timesThirtyNine), 'foo*39')
+
     @unittest.skip('still figuring out how this should work')
     def test_flag(self):
         testFlags = basicTypes.Flag(basicTypes.short, {0:'zero', 1:'one', 2:'two'})

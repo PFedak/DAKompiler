@@ -37,8 +37,6 @@ class Literal:
         if topbyte | 0x80 in range(0xbd,0xc8):
             return '{:.4f}'.format(struct.unpack('>f',self.value.to_bytes(4,byteorder='big'))[0])
 
-        global noooooo
-
         if 'h' in spec or topbyte == 0x80 or self.type == basicTypes.address:
             return hex(self.value)
 
@@ -156,8 +154,12 @@ class Expression(Symbolic):
             if isinstance(left.type, basicTypes.EnumInstance):
                 right.type = left.type
 
-        if op == '<<' and right.value < 8:
+        # simplify multiplications by constants
+        if op == '<<' and isinstance(right, Literal) and right.value < 8:   #assume real shifts are by more
             op, right = '*', Literal(2**right.value)
+        elif op in '+-' and isinstance(left, cls) and left.op == '*':
+            if isinstance(left, cls) and len(left.args) == 1 and left.args[0] == right:
+                return cls('*', [right], left.type, Literal(cls.opLambdas[op](left.constant.value,1)))
 
         if op in '+*|':
             return cls.arithmeticMerge(op, [left, right], flop)
