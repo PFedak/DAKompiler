@@ -83,19 +83,12 @@ class TestExpressions(unittest.TestCase):
         timesThirtyNine = build('-', timesForty, foo)
         self.assertEqual('{}'.format(timesThirtyNine), 'foo*39')
 
-    @unittest.skip('still figuring out how this should work')
-    def test_flag(self):
-        testFlags = basicTypes.Flag(basicTypes.short, {0:'zero', 1:'one', 2:'two'})
-        flagVar = Sym('flags', testFlags)
-        self.assertEqual('{}'.format(build('&', 'flags', Lit(2))), 'flags[one]')
-        self.assertEqual('{}'.format(build('&', 'flags', Lit(5))), 'flags[zero] or flags[two]')
-
 Var = basicTypes.Variable
 
 class TestStructLookup(unittest.TestCase):
     def setUp(self):
         bindings = {'structs':{
-                        'testStruct':basicTypes.StructType('testStruct',4+4+4+8+4, {
+                        'testStruct':basicTypes.Struct('testStruct',4+4+4+8+4, None, {
                             0:Var('zero', basicTypes.word),
                             4:Var('sub', 'subStruct'),
                             #8: word (missing)
@@ -103,14 +96,14 @@ class TestStructLookup(unittest.TestCase):
                             0x14:Var('smallNumber', 'testEnum'),
 
                         }),
-                        'subStruct':basicTypes.StructType('subStruct', 4, {
+                        'subStruct':basicTypes.Struct('subStruct', 4, None, {
                             0:Var('a', basicTypes.short),
                             2:Var('b', basicTypes.byte),
                             3:Var('c', basicTypes.byte),
                         })
                     },
                     'enums':{
-                        'testEnum':basicTypes.EnumType('testEnum',basicTypes.word, {
+                        'testEnum':basicTypes.Enum('testEnum',basicTypes.word, {
                             0:'zero',
                             1:'one',
                             2:'two'
@@ -160,6 +153,17 @@ class TestStructLookup(unittest.TestCase):
         indirect = self.history.lookupAddress(basicTypes.word, self.ptr)
         self.assertEqual(indirect.name, 'bar')
         self.assertEqual(indirect.type, 'testStruct')
+
+    @unittest.skip('still figuring out how this should work')
+    def test_flag(self):
+        testFlags = basicTypes.Flag(basicTypes.short, {0:'zero', 1:'one', 2:'two'})
+        flagVar = Sym('flags', testFlags)
+        self.assertEqual('{}'.format(build('&', 'flags', Lit(2))), 'flags[one]')
+        self.assertEqual('{}'.format(build('&', 'flags', Lit(5))), 'flags[zero] or flags[two]')
+
+    def test_enums(self):
+        e = basicTypes.EnumType('testEnum')
+        self.assertEqual('{}'.format(self.history.getEnumValue(e, 0)), 'testEnum.zero')
 
 if __name__ == '__main__':
     unittest.main()

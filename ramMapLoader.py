@@ -82,7 +82,7 @@ def simpleType(bindings, typeString):
             if canon[0] == 'enum':
                 if canon[1] not in bindings['enums']:
                     bindings['undefined'].add(canon[1])
-                return basicTypes.EnumInstance(canon[1]), None           
+                return basicTypes.EnumType(canon[1]), None           
             if canon[0] not in bindings['structs']:
                 bindings['undefined'].add(canon[0])
             return canon[0], None
@@ -119,7 +119,7 @@ def globalVars(tokens, curr, bindings):
 def enums(tokens, curr, bindings):
     canon = tokens[0].lower()
     if canon not in curr:
-        curr[canon] = basicTypes.EnumType(tokens[0], simpleType(bindings, tokens[1])[0], {})
+        curr[canon] = basicTypes.Enum(tokens[0], simpleType(bindings, tokens[1])[0], {})
         bindings['undefined'].discard(canon)
     return curr[canon], enumValue
 
@@ -142,7 +142,7 @@ def arguments(tokens, curr, bindings):
         try:
             reg = FloatRegister[tokens[0].upper()]
         except:
-            if reg[:2].upper() == 'SP':
+            if tokens[0][:2].upper() == 'SP':
                 reg = basicTypes.Stack(int(tokens[0][2:], 16))
             else:
                 verbosePrint("couldn't understand argument", *tokens)
@@ -159,10 +159,11 @@ def arguments(tokens, curr, bindings):
 def structs(tokens, curr, bindings):
     canon = tokens[0].lower()
     if canon not in curr:
-        curr[canon] = basicTypes.StructType(tokens[0], int(tokens[1],16), {})
+        parentStruct = tokens[2].lower() if len(tokens) == 3 else None
+        curr[canon] = basicTypes.Struct(tokens[0], int(tokens[1],16), parentStruct, {})
         bindings['undefined'].discard(canon)
-        if len(tokens) == 3:
-            curr[canon].members.update(curr[tokens[2].lower()].members)
+        if parentStruct:
+            curr[canon].members.update(curr[parentStruct].members)
     return curr[canon], members
 
 def members(tokens, curr, bindings):

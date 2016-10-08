@@ -151,7 +151,7 @@ class Expression(Symbolic):
                 return left if op == '!=' else left.negated()
             if basicTypes.isAddressable(left.type) and right == 0:
                 return left
-            if isinstance(left.type, basicTypes.EnumInstance):
+            if isinstance(left.type, basicTypes.EnumType):
                 right.type = left.type
 
         # simplify multiplications by constants

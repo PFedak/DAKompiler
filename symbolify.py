@@ -366,8 +366,15 @@ class VariableHistory:
                         st.explicit = True
                         break
                     else:
-                        if st.value.type == basicTypes.unknown:
+                        if isinstance(st.value, algebra.Literal):
+                            if isinstance(fmt, basicTypes.EnumType):
+                                st.value = self.getEnumValue(fmt, st.value.value)
+
+                        elif basicTypes.isAddressable(fmt):
+                            st.value = self.lookupAddress(fmt, st.value)
+                        elif st.value.type == basicTypes.unknown:
                             st.value.type = fmt
+
                         return st.value
                 elif self.now.isCompatibleWith(st.context):
                     st.explicit = True
@@ -403,6 +410,14 @@ class VariableHistory:
             return True
 
     def lookupAddress(self, fmt, address):
+        """Find data of an appropriate format at a (possibly symbolic) address
+        
+            fmt can influence the results
+                lookupAddress(single, address_of_v)  ->   v.x
+                lookupAddress(Vector, address_of_v)  ->   v
+
+            if fmt is unknown (or no match is found), ?????
+        """
         if isinstance(address, algebra.Literal) and address.value in self.bindings['globals']:
             base = algebra.Symbol(*self.bindings['globals'][address.value])
             if basicTypes.isAddressable(base.type):
@@ -504,6 +519,14 @@ class VariableHistory:
             return algebra.Symbol('{}({} + {:h})'.format(fmt, prefix, algebra.Expression.build('+', algebra.Expression('+',others), algebra.Literal(address))), fmt)
         else:
             return algebra.Symbol('{}.{}_{:#x}'.format(prefix, basicTypes.getCode(fmt), address), fmt)
+
+    def getEnumValue(self, fmt, val):
+        try:
+            subname = self.bindings['enums'][fmt.enum].values[val]
+        except:
+            subname = '_{:#x}'.format(val)
+        return algebra.Symbol('{}.{}'.format(fmt.enum, subname), fmt)
+
 
     @staticmethod
     def getName(var):
