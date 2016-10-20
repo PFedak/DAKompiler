@@ -12,6 +12,17 @@ def extend(const):
     else:
         return const-0x10000
 
+def moveReg(reg, isFrom):
+    def foo(instr, history):
+        if isFrom:
+            value = history.read(reg)
+            toWrite = instr.destReg
+        else:
+            toWrite = reg
+            value = history.read(instr.sourceReg)
+        return InstrResult.register, history.write(toWrite, value)
+    return foo
+
 def assignReg(w, fmt ,op):
     def foo(instr, history):
         value = get_value(history, instr)
@@ -145,6 +156,10 @@ conversionList = {
     RegOp.ADDU: assignReg('D','S+T','+'),
     RegOp.SUB: assignReg('D','S+T','-'),
     RegOp.SUBU: assignReg('D','S+T','-'),
+    RegOp.MFHI: moveReg(SpecialRegister.MultHi, isFrom = True),
+    RegOp.MTHI: moveReg(SpecialRegister.MultHi, False),
+    RegOp.MFLO: moveReg(SpecialRegister.MultLo, True),
+    RegOp.MTLO: moveReg(SpecialRegister.MultLo, False),
     RegOp.DIV: assignReg('D','S+T','/'),
     RegOp.AND: assignReg('D','S+T','&'),
     RegOp.OR: assignReg('D','S+T','|'),
@@ -342,9 +357,9 @@ class VariableHistory:
         self.write(Register.R0, algebra.Literal(0))
         self.write(Register.SP, algebra.Symbol('SP'))
         self.write(Register.RA, algebra.Symbol('RA'))
-        self.write('CC', algebra.Symbol('bad_CC'))
+        self.write(SpecialRegister.Compare, algebra.Symbol('bad_CC'))
         for reg, name, fmt in args:
-            showName = name if name else VariableHistory.getName(arg)
+            showName = name if name else VariableHistory.getName(reg)
             self.argList.append(reg)
             self.write(reg, algebra.Symbol(showName, fmt))
 
