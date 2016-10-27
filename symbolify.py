@@ -687,8 +687,8 @@ def makeSymbolic(name, mipsData, bindings, arguments = []):
                             history.markBad(s)
                         else:
                             break
-                
-                marker = algebra.Symbol('returnValue_{:x}'.format((lineNum - 1)*4))
+
+                marker = algebra.Symbol('returnValue_{:x}'.format((lineNum - 1)*4), basicTypes.bad)
                 currBlock.code.append((InstrResult.function, title, argList, marker))
                 history.write(Register.V0, marker)
                 history.write(FloatRegister.F0, marker)
