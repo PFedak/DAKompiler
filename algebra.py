@@ -81,7 +81,14 @@ class Expression(Symbolic):
         self.type = fmt
         self.constant = constant
 
+    specialFormat = None
+
     def __format__(self, spec):
+        if Expression.specialFormat:
+            specialResult = Expression.specialFormat(self, spec)
+            if specialResult:
+                return specialResult
+
         if self.op == '@':
             fmtString = '{}({:h})' if isinstance(self.args[0], basicTypes.Primitive) else '{}({})'
             return fmtString.format(self.args[0], self.args[1])
