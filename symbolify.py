@@ -279,7 +279,7 @@ class Context:
                 allChoices.add(ch)
         allChoices = sorted(allChoices)
         #kinda sorta Quine-McCluskey
-        byLenbyOnes = defaultdict(lambda: defaultdict(dict))    
+        byLenbyOnes = defaultdict(lambda: defaultdict(dict))
         prime = set()
         for br in branchList:
             byLenbyOnes[len(br)][sum(1 for ch in br if br[ch])][br]= False
@@ -288,7 +288,7 @@ class Context:
             for ones in range(L+1):
                 for lower in byLenbyOnes[L][ones]:
                     for upper in byLenbyOnes[L][ones+1]:
-                        # find True/False differences 
+                        # find True/False differences
                         index = lower.tryMerge(upper)
                         if index >= 0:
                             byLenbyOnes[L][ones][lower] = True
@@ -308,8 +308,8 @@ class Context:
     def implies(self, other):
         """Check if this context implies the other one, and if so return the relative conditions"""
 
-        # There are combinations of context that will make the "relative" result nonsensical, 
-        #   I'm not certain if they will actually appear. For instance, 
+        # There are combinations of context that will make the "relative" result nonsensical,
+        #   I'm not certain if they will actually appear. For instance,
         #   self = (x and not y and z) or (x and y and not z)
         #   other = (x and not y) or (x and y)
         #   self does imply other, but relative will be an empty context
@@ -371,7 +371,7 @@ class VariableHistory:
 
     def read(self, var, fmt = basicTypes.unknown):
         """Retrive (an appropriate representation of) the value in a register and track its usage
-            
+
             var should be a register or Stack() object
 
             Depending on the expected format, the stored value may be altered substantially
@@ -401,27 +401,27 @@ class VariableHistory:
             return algebra.Symbol(VariableHistory.getName(var), fmt)
         else:
             symName = VariableHistory.getName(var)
-            if VariableHistory.couldBeArg(var): 
+            if VariableHistory.couldBeArg(var):
                 self.argList.append(var)
                 symName = 'arg_' + symName
             self.states[var].append(VariableState(self.getName(var), algebra.Symbol(symName, fmt), self.now))
             return self.states[var][-1].value
-        
+
 
     def write(self, var, value):
         self.states[var].append(VariableState(self.getName(var), value, self.now))
         return self.states[var][-1]
 
     def markBad(self, var):
-        self.write(var, algebra.Symbol('bad_%s' % VariableHistory.getName(var), basicTypes.bad))    
+        self.write(var, algebra.Symbol('bad_%s' % VariableHistory.getName(var), basicTypes.bad))
 
     def isValid(self, var):
         """Determine if reading from the variable makes sense, mainly for function arguments"""
 
         # has the function been touched at all?
-        if var not in self.states:  
+        if var not in self.states:
             return False
-        # have we marked it as "bad" - 
+        # have we marked it as "bad" -
         try:
             return self.states[var][-1].value.type != basicTypes.bad
         except:
@@ -430,7 +430,7 @@ class VariableHistory:
 
     def lookupAddress(self, fmt, address):
         """Find data of an appropriate format at a (possibly symbolic) address
-        
+
             fmt can influence the results
                 lookupAddress(single, address_of_v)  ->   v.x
                 lookupAddress(Vector, address_of_v)  ->   v
@@ -439,9 +439,9 @@ class VariableHistory:
         """
         base = None
         memOffset = 0
-        others = []     
+        others = []
         if isinstance(address, algebra.Literal):
-            memOffset = address.value       
+            memOffset = address.value
         elif isinstance(address, algebra.Symbol):
             if isinstance(address.type, basicTypes.Pointer):
                 return algebra.Symbol(address.type.target if address.type.target else address.name,
@@ -556,7 +556,7 @@ class VariableHistory:
     @staticmethod
     def getName(var):
         try:
-            return var.name 
+            return var.name
         except:
             try:
                 return 'stack_%x' % var.offset
@@ -648,7 +648,7 @@ def makeSymbolic(name, mipsData, bindings, arguments = []):
                 continue
             elif result[0] != InstrResult.none:
                 currBlock.code.append(result)
-        
+
         if delayed:
             if delayed[0] in [InstrResult.branch, InstrResult.likely, InstrResult.jump]:
                 branchType, branchDest = delayed
@@ -701,7 +701,7 @@ def makeSymbolic(name, mipsData, bindings, arguments = []):
                     returnValue = None
                 currBlock.code.append((InstrResult.end, returnValue))
             delayed = None
-    
+
     return mainCode, history, booleans
 
 

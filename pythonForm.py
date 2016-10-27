@@ -52,7 +52,7 @@ def renderToPython(codeTree, booleans, level = 0):
                 keyword = '{}if {}:'
                 toShow = block.relative
 
-            prefix = keyword.format(indent*level, 
+            prefix = keyword.format(indent*level,
                     ' or '.join(
                         ' and '.join(
                             ('{}' if val else '{:!}').format(booleans[ch]) for ch, val in br.items()

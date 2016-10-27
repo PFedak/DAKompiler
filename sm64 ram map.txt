@@ -1,4 +1,4 @@
-version     1.0                 
+version     1.0
 rom         Super Mario 64      #exact spacing and case are ignored
 
 # all numbers are hex
@@ -17,7 +17,7 @@ rom         Super Mario 64      #exact spacing and case are ignored
 # format for sections
 #section name           region specifier    (could be U, J, or E  (or blank for region independent))
 
-structs         
+structs
 #   struct name         size (bytes)        base struct (must already be defined)
     Vector              c
         0       x               single
@@ -75,8 +75,8 @@ structs
 
         74      active          Hflag
         76      numColliders    short
-        78      colliders       [*Object] 4 
-        
+        78      colliders       [*Object] 4
+
         # beginning of variable block which can change for different types of objects
         8c      flags           Wflag
             d       calcMarioAngle
@@ -105,7 +105,7 @@ structs
         18c     prevAction      word
 
         1cc     scriptEntry     address     #the next line of the object script to execute
-        1d0     stackIndex      word        
+        1d0     stackIndex      word
         1d4     stack           [word] 10
 
         1f8     colRadius       single      #properties of collision cylinder
@@ -119,7 +119,7 @@ structs
 
     BigPenguin          260             Object
         f4      waitTime        word        #time to wait before talking again
-        fc      startWaypoint   address     
+        fc      startWaypoint   address
         100     currWaypoint    address
         104     waypointID      word
         108     slopeToWaypoint word
@@ -159,7 +159,7 @@ structs
         6c      ceilHeight      single
         70      floorHeight     single
         76      waterHeight     short
-        
+
         78      bumped          *Object
         88      object          *Object
 
@@ -236,11 +236,11 @@ enums
         2e          ice
         38          windArea        #Mario is carried by wind
 
-        72          painting        
+        72          painting
         7b          invisCap
 
     GFXtype                         short
-        02          screenSpaceMap      
+        02          screenSpaceMap
         04          masterDisplayList   #handles and categorizes all display lists
         18          object
         1c          scalingMatrix

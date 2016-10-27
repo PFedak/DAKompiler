@@ -55,7 +55,7 @@ class Symbol(Symbolic):
     def __init__(self, sym, d = basicTypes.unknown):
         self.name = sym
         self.type = d
-        
+
     def negated(self):
         return Symbol('not {}'.format(self))    # not a good solution
 
@@ -103,7 +103,7 @@ class Expression(Symbolic):
             inner = '{:ph}'
         else:
             inner = '{:p}'
-            
+
         try:
             return ('({}{})' if 'p' in spec else '{}{}').format(sep.join(inner.format(a) for a in self.args),
                                                 '{{}}{}'.format(inner).format(sep,self.constant) if self.constant else '')

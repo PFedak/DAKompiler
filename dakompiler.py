@@ -5,11 +5,12 @@ from ramMapLoader import arguments as parseArgument
 from symbolify import makeSymbolic, extend
 from ramMapLoader import loadBindings
 from pythonForm import renderFunctionToPython as render
+#from Cform import renderFunctionToC as render
 
 def chunks(seq, n):
     for lineNum in range(0, len(seq), n):
         yield seq[lineNum:lineNum + n]
-        
+
 class RAMSnapshot:
     def __init__(self, filename, startAddress, length = 0):
         with open(filename, 'rb') as f:
@@ -41,7 +42,7 @@ def findFunction(start, ram):
                     return None
         current += 4
     return None  # function did not end
-        
+
 def disassembleBlock(data):
     """Converts binary data into MIPS"""
     return [instruction.Instruction(w) for w in struct.unpack('>' + 'L'*(len(data)//4), data)]
@@ -49,10 +50,10 @@ def disassembleBlock(data):
 def decompileFunction(ram, bindings, address, name=None, args=[]):
     """"
         Produce Python code (roughly) equivalent to the specified function.
-        
+
         bindings is a nested dictionary object produced by loadBindings
-        args is a list of strings of form "regName argName argType" where argType can be an 
-            arbitrary type string as in the RAM map specification 
+        args is a list of strings of form "regName argName argType" where argType can be an
+            arbitrary type string as in the RAM map specification
     """
     data = findFunction(address, ram)
     if not data:
