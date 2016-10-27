@@ -69,8 +69,8 @@ class Symbol(Symbolic):
         return self.name
 
     def __repr__(self):
-        return 'Symbol({},{})'.format(self.name,self.type)
-    
+        return 'Symbol({!r}, {!r})'.format(self.name,self.type)
+
 class Expression(Symbolic):
 
     logicOpposite = {'==':'!=', '!=':'==', '>':'<=', '<':'>=', '<=':'>', '>=':'<'}
@@ -83,10 +83,18 @@ class Expression(Symbolic):
 
     def __format__(self, spec):
         if self.op == '@':
-            return '{}({})'.format(self.args[0], self.args[1])
+            fmtString = '{}({:h})' if isinstance(self.args[0], basicTypes.Primitive) else '{}({})'
+            return fmtString.format(self.args[0], self.args[1])
+
+        if self.op == '.':
+            return '{}.{}'.format(self.args[0], self.args[1])
+
+        if self.op == '[':
+            return '{}[{}]'.format(self.args[0], self.constant)
+
         if '!' in spec and self.type == basicTypes.boolean:
             sep = ' {} '.format(Expression.logicOpposite[self.op])
-        elif self.op in '* / **'.split():
+        elif self.op in '* / ** .'.split():
             sep = self.op
         else:
             sep = ' {} '.format(self.op)
@@ -136,6 +144,9 @@ class Expression(Symbolic):
         if op == 'NOR':     #why is this a thing
             return cls('~',[cls.build('|', left, right, flop)])
 
+        if op == '[':
+            return cls('[', [left], fmt = left.type.pointedType, constant = right)
+
         if isinstance(left, Literal):
             if isinstance(right, Literal):
                 #two literals, completely reducible
@@ -149,7 +160,7 @@ class Expression(Symbolic):
         if op in ['==', '!='] and isinstance(right, Literal):
             if left.type == basicTypes.boolean and right == 0:
                 return left if op == '!=' else left.negated()
-            if basicTypes.isAddressable(left.type) and right == 0:
+            if basicTypes.isIndexable(left.type) and right == 0:
                 return left
             if isinstance(left.type, basicTypes.EnumType):
                 right.type = left.type
@@ -168,7 +179,10 @@ class Expression(Symbolic):
 
         if op in '< > <= >= == !='.split():
             new.type = basicTypes.boolean
-            
+
+        if op == '.':
+            new.type = right.type
+
         return new
 
     @classmethod
@@ -195,7 +209,7 @@ class Expression(Symbolic):
                 else:
                     newType = basicTypes.word
                     for s in symbols:
-                        if basicTypes.isAddressable(s.type):
+                        if basicTypes.isIndexable(s.type):
                             newType = basicTypes.address
                             break
                 return cls(op, symbols, constant=newConstant, fmt=newType)

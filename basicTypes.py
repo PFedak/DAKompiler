@@ -17,6 +17,8 @@ class Primitive:
         self.name = name
         Primitive.lookup[name] = self
     def __repr__(self):
+        return 'Primitive({})'.format(self.name)
+    def __format__(self, spec):
         return self.name
 
 unknown = Primitive('unknown', 0)
@@ -48,5 +50,5 @@ def getCode(t):
     }
     return codeTable[t] if isinstance(t, Primitive) else 'p'
 
-def isAddressable(t):
-    return isinstance(t, Pointer) or isinstance(t, Array) or isinstance(t, str)
+def isIndexable(t):
+    return isinstance(t, Array) or isinstance(t, str)

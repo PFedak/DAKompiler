@@ -49,7 +49,7 @@ class TestContexts(unittest.TestCase):
                 temp = temp.branchOff(j, i &(1 << j))
             base.append(temp)
         self.assertTrue(Context(base).isTrivial())
-       
+
 build = algebra.Expression.build
 Lit = algebra.Literal
 Sym = algebra.Symbol
@@ -63,7 +63,7 @@ class TestExpressions(unittest.TestCase):
         self.assertEqual('{}'.format(bar), 'bar')
         #constants are grouped and placed at the end
         together = build('+',three, bar)
-        self.assertEqual('{}'.format(together),'bar + 3') 
+        self.assertEqual('{}'.format(together),'bar + 3')
         self.assertEqual('{}'.format(build('+',together,together)), 'bar + bar + 6')
 
     def test_arithMerge(self):
@@ -108,46 +108,53 @@ class TestStructLookup(unittest.TestCase):
                             1:'one',
                             2:'two'
                         })
+                    },
+                    'globals':{
                     }
                 }
         self.foo = Sym('foo', 'testStruct')
         self.history = symbolify.VariableHistory(bindings)
-        self.ptr = Sym('structPointer',basicTypes.Pointer('testStruct', 'bar'))
+        self.ptr = Sym('structPointer', basicTypes.Pointer('testStruct', 'bar'))
 
     def test_sizes(self):
         gs = self.history.getSize
         self.assertEqual(gs(basicTypes.ushort), 2)
         self.assertEqual(gs(basicTypes.Flag(basicTypes.byte,{})), 1)
         self.assertEqual(gs(self.ptr.type), 4)
-        self.assertEqual(gs('testEnum'), 4)
+        self.assertEqual(gs(basicTypes.EnumType('testEnum')), 4)
         self.assertEqual(gs(basicTypes.Array(basicTypes.short, 5)), 10)
         self.assertEqual(gs(basicTypes.Array(self.ptr.type, 3)), 12)
         self.assertEqual(gs('testStruct'), 24)
 
 
     def test_member(self):
-        self.assertEqual(self.history.lookupAddress(basicTypes.word, self.foo).name, 'foo.zero')
+        self.assertEqual('{}'.format(self.history.subLookup(basicTypes.word, self.foo, 0)), 'foo.zero')
 
     def test_subMember(self):
-        self.assertEqual(self.history.lookupAddress(basicTypes.short, build('+',self.foo,Lit(4))).name, 'foo.sub.a')
-        self.assertEqual(self.history.lookupAddress(basicTypes.byte, build('+',self.foo,Lit(7))).name, 'foo.sub.c')
+        self.assertEqual('{}'.format(self.history.subLookup(basicTypes.short, self.foo, 4)), 'foo.sub.a')
+        self.assertEqual('{}'.format(self.history.subLookup(basicTypes.byte, self.foo, 7)), 'foo.sub.c')
 
     def test_array(self):
-        self.assertEqual(self.history.lookupAddress(basicTypes.short, build('+',self.foo, Lit(0xc))).name, 'foo.array[0]')
-        self.assertEqual(self.history.lookupAddress(basicTypes.short, build('+',self.foo, Lit(0xe))).name, 'foo.array[1]')
+        self.assertEqual('{}'.format(self.history.subLookup(basicTypes.short, self.foo, 0xc)), 'foo.array[0]')
+        self.assertEqual('{}'.format(self.history.subLookup(basicTypes.short, self.foo, 0xe)), 'foo.array[1]')
 
     def test_varArray(self):
-        address = algebra.Expression('+', [self.foo, build('<<',Sym('bar'), Lit(1))], constant = Lit(0xc))
-        self.assertEqual(self.history.lookupAddress(basicTypes.short, address).name, 'foo.array[bar]')
-        newAddress = build('+', address, build('*',build('+',Sym('extra'), Lit(1)), Lit(2)))
-        self.assertEqual(self.history.lookupAddress(basicTypes.short, newAddress).name, 
-                            'foo.array[bar + extra + 1]')
+        self.assertEqual('{}'.format(self.history.subLookup(basicTypes.short, self.foo, 0xc, [build('<<',Sym('bar'), Lit(1))])),
+            'foo.array[bar]')
+        self.assertEqual('{}'.format(
+                            self.history.subLookup(
+                                basicTypes.short, self.foo, 0xc, [
+                                    build('<<',Sym('bar'), Lit(1)),
+                                    build('*',build('+',Sym('extra'), Lit(1)), Lit(2))
+                                ])),
+                        'foo.array[bar + extra + 1]')
 
     def test_unknown(self):
-        self.assertEqual(self.history.lookupAddress(basicTypes.short, build('+',self.foo, Lit(8))).name, 'foo.h_0x8')
+        self.assertEqual('{}'.format(self.history.subLookup(basicTypes.short, self.foo, 8)), 'foo.h_0x8')
 
     def test_tooFar(self):
-        self.assertRaises(Exception, self.history.lookupAddress, basicTypes.word, build('+',self.foo, Lit(0x20)))
+        self.assertRaises(Exception,
+            self.history.lookupAddress, basicTypes.word, build('+', self.ptr, Lit(0x40)))
 
     def test_pointer(self):
         indirect = self.history.lookupAddress(basicTypes.word, self.ptr)

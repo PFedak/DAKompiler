@@ -86,4 +86,4 @@ def showMIPSblock(ram, address, length):
 
 b = loadBindings('sm64 ram map.txt', 'J')
 marioRam = RAMSnapshot('marioRam',0x80000000)
-print(decompileFunction(marioRam,b, 0x8026BFC8, args = ['A0 mario Mario']))
+print(decompileFunction(marioRam,b, 0x8026BFC8, args = ['A0 mario *Mario']))

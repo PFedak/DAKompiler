@@ -6,6 +6,8 @@ import basicTypes
 import algebra
 from instruction import *
 
+buildExpr = algebra.Expression.build
+
 def extend(const):
     if const < 0x8000:
         return const
@@ -42,23 +44,23 @@ def assignReg(w, fmt ,op):
 
     def get_value(history, instr):
         if fmt == 'S+xI':
-            return algebra.Expression.build(op, history.read(instr.sourceReg, basicTypes.word), algebra.Literal(instr.immediate))
+            return buildExpr(op, history.read(instr.sourceReg, basicTypes.word), algebra.Literal(instr.immediate))
         elif fmt == 'S+I':
-            return algebra.Expression.build(op, history.read(instr.sourceReg, basicTypes.word), algebra.Literal(extend(instr.immediate)))
+            return buildExpr(op, history.read(instr.sourceReg, basicTypes.word), algebra.Literal(extend(instr.immediate)))
         elif fmt == 'f(I)':
             return algebra.Literal(op(instr.immediate))
         elif fmt == 'F+F':
-            return algebra.Expression.build(op, history.read(instr.fs, basicTypes.single), 
+            return buildExpr(op, history.read(instr.fs, basicTypes.single),
                                         history.read(instr.ft, basicTypes.single), flop=True)
         elif fmt == '@F':
             if op == 'id':
                 return history.read(instr.fs)
             else:
-                return algebra.Expression.build('@', op, history.read(instr.fs))
+                return buildExpr('@', op, history.read(instr.fs))
         elif fmt == 'T<<A':
-            return algebra.Expression.build(op, history.read(instr.targetReg), algebra.Literal(instr.shift))
+            return buildExpr(op, history.read(instr.targetReg, basicTypes.word), algebra.Literal(instr.shift))
         elif fmt == 'S+T':
-            return algebra.Expression.build(op, history.read(instr.sourceReg, basicTypes.word),
+            return buildExpr(op, history.read(instr.sourceReg, basicTypes.word),
                                         history.read(instr.targetReg, basicTypes.word))
         raise Error("Bad format")
 
@@ -71,9 +73,9 @@ def loadMemory(datatype):
     def foo(instr, history):
         if instr.sourceReg == Register.SP:
             #TODO account for more general reads (ie, just the lower bytes of a word)
-            value = history.read(basicTypes.Stack(extend(instr.immediate)), datatype)  
+            value = history.read(basicTypes.Stack(extend(instr.immediate)), datatype)
         else:
-            address = algebra.Expression.build('+', history.read(instr.sourceReg, basicTypes.address), 
+            address = buildExpr('+', history.read(instr.sourceReg, basicTypes.address),
                                             algebra.Literal(extend(instr.immediate)))
             value = history.lookupAddress(datatype, address)
         return InstrResult.register, history.write(instr.targetReg, value)
@@ -83,10 +85,10 @@ def storeMemory(datatype):
     def foo(instr, history):
         if instr.sourceReg == Register.SP:
             return InstrResult.register, history.write(basicTypes.Stack(extend(instr.immediate)),
-                                                        history.read(instr.targetReg, datatype)) 
+                                                        history.read(instr.targetReg, datatype))
         else:
-            dest = history.lookupAddress(datatype, algebra.Expression.build('+', 
-                                                        history.read(instr.sourceReg, basicTypes.address), 
+            dest = history.lookupAddress(datatype, buildExpr('+',
+                                                        history.read(instr.sourceReg, basicTypes.address),
                                                         algebra.Literal(extend(instr.immediate))))
             return InstrResult.write, history.read(instr.targetReg, dest.type), dest
     return foo
@@ -95,10 +97,10 @@ def branchMaker(comp, withZero, likely = False):
     def doBranch(instr, history):
         if instr.opcode == MainOp.BEQ and instr.sourceReg == instr.targetReg:
             return InstrResult.jump, None, extend(instr.immediate)
-        return (InstrResult.likely if likely else InstrResult.branch, 
-                    algebra.Expression.build(comp, 
-                        history.read(instr.sourceReg, basicTypes.word), 
-                        history.read(Register.R0 if withZero else instr.targetReg, basicTypes.word)), 
+        return (InstrResult.likely if likely else InstrResult.branch,
+                    buildExpr(comp,
+                        history.read(instr.sourceReg, basicTypes.word),
+                        history.read(Register.R0 if withZero else instr.targetReg, basicTypes.word)),
                     extend(instr.immediate))
     return doBranch
 
@@ -107,7 +109,7 @@ def MFC_python(instr, history):
         raise Exception("COP0 unimplemented")
     if instr.cop == 1:
         return InstrResult.register, history.write(instr.targetReg, history.read(instr.fs))
-    
+
 def MTC_python(instr, history):
     if instr.cop == 0:
         raise Exception("COP0 unimplemented")
@@ -146,12 +148,12 @@ conversionList = {
     MainOp.SWC1: storeMemory(basicTypes.single),
     MainOp.SDC1: storeMemory(basicTypes.double),
     MainOp.LDC1: loadMemory(basicTypes.double),
-    
+
     RegOp.SLL: assignReg('D','T<<A','<<'),
     RegOp.SRL: assignReg('D','T<<A','>>'),
     RegOp.SRA: assignReg('D','T<<A','>a'),
-    RegOp.JR: lambda instr, history: (InstrResult.end,) if instr.sourceReg == Register.RA else (InstrResult.unhandled, Expression.build('@','JR',history.read(instr.sourceReg))),
-    RegOp.JALR: lambda instr, history: (InstrResult.function, '{}'.format(history.read(instr.sourceReg, basicTypes.address))), 
+    RegOp.JR: lambda instr, history: (InstrResult.end,) if instr.sourceReg == Register.RA else (InstrResult.unhandled, buildExpr('@','JR',history.read(instr.sourceReg))),
+    RegOp.JALR: lambda instr, history: (InstrResult.function, '{}'.format(history.read(instr.sourceReg, basicTypes.address))),
     RegOp.ADD: assignReg('D','S+T','+'),
     RegOp.ADDU: assignReg('D','S+T','+'),
     RegOp.SUB: assignReg('D','S+T','-'),
@@ -384,12 +386,10 @@ class VariableHistory:
                         if isinstance(st.value, algebra.Literal):
                             if isinstance(fmt, basicTypes.EnumType):
                                 st.value = self.getEnumValue(fmt, st.value.value)
-
-                        elif basicTypes.isAddressable(fmt):
+                        elif basicTypes.isIndexable(fmt):
                             st.value = self.lookupAddress(fmt, st.value)
-                        elif st.value.type == basicTypes.unknown:
+                        elif st.value.type in [basicTypes.unknown, basicTypes.bad]:
                             st.value.type = fmt
-
                         return st.value
                 elif self.now.isCompatibleWith(st.context):
                     st.explicit = True
@@ -433,13 +433,6 @@ class VariableHistory:
 
             if fmt is unknown (or no match is found), ?????
         """
-        if isinstance(address, algebra.Literal) and address.value in self.bindings['globals']:
-            base = algebra.Symbol(*self.bindings['globals'][address.value])
-            if basicTypes.isAddressable(base.type):
-                return self.subLookup(fmt, base.name, base.type, 0)
-            else:
-                return base     
-
         base = None
         memOffset = 0
         others = []     
@@ -447,15 +440,14 @@ class VariableHistory:
             memOffset = address.value       
         elif isinstance(address, algebra.Symbol):
             if isinstance(address.type, basicTypes.Pointer):
-                return algebra.Symbol(address.type.target if address.type.target else address.name, address.type.pointedType)
-            if basicTypes.isAddressable(address.type):
-                base = address
+                return algebra.Symbol(address.type.target if address.type.target else address.name,
+                    address.type.pointedType)
         elif isinstance(address, algebra.Expression) and address.op == '+':
             memOffset = address.constant.value if address.constant else 0
             for term in address.args:
-                if basicTypes.isAddressable(term.type):
+                if isinstance(term.type, basicTypes.Pointer):
                     if base:
-                        raise Exception('adding structs')
+                        raise Exception('adding pointers')
                     base = term
                 else:
                     others.append(term)
@@ -470,15 +462,24 @@ class VariableHistory:
                     pass
             pair = self.relativeToGlobals(memOffset)
             if pair:
-                return self.subLookup(fmt, pair[0].name, pair[0].type, pair[1], others)
+                base = algebra.Symbol('raw', basicTypes.Pointer(pair[0].type, pair[0].name))
+                memOffset = pair[1]
+            else:
+                # no idea what we are looking at, process it anyway
+                return buildExpr('@', fmt, address)
 
-            # no idea what we are looking at, process it anyway
-            return algebra.Symbol('{}({:h})'.format(fmt, address), fmt)
-        if memOffset >= self.getSize(base.type):
-            raise Exception('trying to look up address %#x in %s (only %#x bytes)' % (memOffset, base.type, self.getSize(base.type)))
-
-        # determine which member struct we are trying to access
-        return self.subLookup(fmt, base.name, base.type, memOffset, others)
+        if basicTypes.isIndexable(base.type.pointedType):
+            if memOffset >= self.getSize(base.type.pointedType):
+                raise Exception('trying to look up address {:#x} in {} (only {:#x} bytes)'.format(
+                    memOffset, base.type.pointedType, self.getSize(base.type)))
+            if base.type.target:
+                return self.subLookup(fmt, algebra.Symbol(base.type.target, base.type.pointedType), memOffset, others)
+            else:
+                return self.subLookup(fmt, base, memOffset, others)
+        elif base.type.target and memOffset == 0 and not others:
+            return algebra.Symbol(base.type.target, base.type.pointedType)
+        else:
+            return buildExpr('@', fmt, address)
 
     def relativeToGlobals(self, offset):
         try:
@@ -493,54 +494,59 @@ class VariableHistory:
         else:
             return base, relOffset
 
-    def subLookup(self, fmt, prefix, superType, address, others = []):
+    def subLookup(self, fmt, base, address, others = []):
         """Recursively find data at the given address from the start of a type"""
-        if isinstance(superType, basicTypes.Array):
-            index = algebra.Literal(address//self.getSize(superType.pointedType))
+        if isinstance(base.type, basicTypes.Array):
+            spacing = self.getSize(base.type.pointedType)
+            index = algebra.Literal(address//spacing)
             canIndex = True
-            if others:
-                for o in others:
-                    try:
-                        if o.op == '*' and o.constant.value == self.getSize(superType.pointedType):
-                            index = algebra.Expression.build('+', index, algebra.Expression.arithmeticMerge('*', o.args))
-                        else:
-                            canIndex = False
-                            break 
-                    except:
-                        canIndex = False
-                        break 
+            for o in others:
+                if (isinstance(o, algebra.Expression) and o.op == '*'
+                        and o.constant and o.constant.value == spacing):
+                    index = buildExpr('+', index, algebra.Expression.arithmeticMerge('*', o.args))
+                else:
+                    canIndex = False
+                    break
             if canIndex:
-                return algebra.Symbol('{}[{}]'.format(prefix, index), superType.pointedType)
+                element = buildExpr('[', base, index)
+                if basicTypes.isIndexable(base.type.pointedType):
+                    return self.subLookup(fmt, element, address % spacing)
+                else:
+                    return element
             else:
-                offset = algebra.Expression.arithmeticMerge('+', others + [algebra.Literal(address)])
-                return algebra.Symbol('{}({} + {:h})'.format(fmt, prefix, offset), superType.pointedType)
-        if isinstance(superType, basicTypes.Pointer):
-            return algebra.Symbol(superType.target if superType.target else prefix, superType.pointedType)
-        if isinstance(superType, str):
+                return buildExpr('@',fmt, algebra.Expression.arithmeticMerge('+', [base, algebra.Literal(address)] + others))
+        parentStruct = None
+        if isinstance(base.type, basicTypes.Pointer):
+            parentStruct = base.type.pointedType
+        elif isinstance(base.type, str):
+            parentStruct = base.type
+
+        if parentStruct and parentStruct in self.bindings['structs']:
+            members = self.bindings['structs'][parentStruct].members
             try:
-                members = self.bindings['structs'][superType].members
                 bestOffset = max(x for x in members if x <= address)
-                base = algebra.Symbol(*members[bestOffset])
-                if address < bestOffset + self.getSize(base.type):
-                    if basicTypes.isAddressable(base.type):
-                        return self.subLookup(fmt, '{}.{}'.format(prefix, base), base.type, address - bestOffset, others)
+            except ValueError: # nothing less
+                pass
+            else:
+                newBase = buildExpr('.', base, algebra.Symbol(*members[bestOffset]))
+                if address < bestOffset + self.getSize(newBase.type):
+                    if basicTypes.isIndexable(newBase.type):
+                        return self.subLookup(fmt, newBase, address - bestOffset, others)
                     if not others:
                         #TODO account for reading the lower short of a word, etc.
-                        return algebra.Symbol('{}.{}'.format(prefix, base), base.type)
-            except:
-                pass    #unknown struct, nothing in max(), went too far
-        # nothing matched
+                        return newBase
         if others:
-            return algebra.Symbol('{}({} + {:h})'.format(fmt, prefix, algebra.Expression.build('+', algebra.Expression('+',others), algebra.Literal(address))), fmt)
+            return buildExpr('@', fmt, algebra.arithmeticMerge('+', [base, algebra.Literal(address)] + others))
         else:
-            return algebra.Symbol('{}.{}_{:#x}'.format(prefix, basicTypes.getCode(fmt), address), fmt)
+            return buildExpr('.', base, algebra.Symbol('{}_{:#x}'.format(basicTypes.getCode(fmt), address), fmt))
+
 
     def getEnumValue(self, fmt, val):
         try:
             subname = self.bindings['enums'][fmt.enum].values[val]
         except:
             subname = '_{:#x}'.format(val)
-        return algebra.Symbol('{}.{}'.format(fmt.enum, subname), fmt)
+        return buildExpr('.', fmt.enum, algebra.Symbol(subname, fmt))
 
 
     @staticmethod
@@ -562,23 +568,18 @@ class VariableHistory:
             if isinstance(t, basicTypes.Flag):
                 return t.base.size
             if isinstance(t, basicTypes.Array):
-                return t.length * self.getSize(t.pointedType) 
+                return t.length * self.getSize(t.pointedType)
             if t in self.bindings['structs']:
                 return self.bindings['structs'][t].size
-            if t in self.bindings['enums']:
-                return self.getSize(self.bindings['enums'][t].base)
+            if isinstance(t, basicTypes.EnumType):
+                return self.getSize(self.bindings['enums'][t.enum].base)
         print('failed to size', t)
 
     @staticmethod
     def couldBeArg(var):
         if var in [Register.A0, Register.A1, Register.A2, Register.A3, FloatRegister.F12, FloatRegister.F14]:
             return True
-        try:
-            if var.offset in range(0x10,0x20):
-                return True
-        except:
-            pass
-        return False
+        return isinstance(var, basicTypes.Stack) and var.offset in range(0x10,0x20)
 
 class CodeBlock:
     def __init__(self, context, parent = None, relative = None):
