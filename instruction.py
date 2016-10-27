@@ -145,6 +145,7 @@ class Instruction:
     branchOPs = set([MainOp[x] for x in "BEQ BNE BLEZ BGTZ BEQL BNEL BLEZL BGTZL".split()] + [CopOp[x] for x in "BCF BCT BCFL BCTL".split()])
     J_format = set([MainOp.J,MainOp.JAL])
     I_format = set([CopOp.BCF,CopOp.BCT,CopOp.BCFL,CopOp.BCTL])
+    D_format = set([RegOp.MFLO, RegOp.MFHI])
     R_format = set([RegOp.JALR,RegOp.JR,RegOp.MFHI,RegOp.MTHI,RegOp.MFLO,RegOp.MTLO])
     RI_format = set([MainOp.LUI, MainOp.BLEZL,MainOp.BGTZL])
     SI_format = set([MainOp.BLEZ, MainOp.BGTZ, SpecialOp.BLTZ,SpecialOp.BGEZ,SpecialOp.BLTZL,SpecialOp.BGEZL])
@@ -240,6 +241,8 @@ class Instruction:
     def __str__(self):
         if self.opcode in Instruction.J_format:
             return '%s %#X' % (self.opcode.name, self.target)
+        if self.opcode in Instruction.D_format:
+            return '%s %s' % (self.opcode.name, self.destReg.name)
         if self.opcode in Instruction.R_format:     
             return '%s %s' % (self.opcode.name, self.sourceReg.name)
         if self.opcode in Instruction.I_format:

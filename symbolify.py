@@ -62,6 +62,9 @@ def assignReg(w, fmt ,op):
         elif fmt == 'S+T':
             return buildExpr(op, history.read(instr.sourceReg, basicTypes.word),
                                         history.read(instr.targetReg, basicTypes.word))
+        elif fmt == 'T<<S':
+            return buildExpr(op, history.read(instr.targetReg, basicTypes.word),
+                                        history.read(instr.sourceReg, basicTypes.word))
         raise Error("Bad format")
 
     return foo
@@ -152,6 +155,7 @@ conversionList = {
     RegOp.SLL: assignReg('D','T<<A','<<'),
     RegOp.SRL: assignReg('D','T<<A','>>'),
     RegOp.SRA: assignReg('D','T<<A','>a'),
+    RegOp.SLLV: assignReg('D', 'T<<S', '<<'),
     RegOp.JR: lambda instr, history: (InstrResult.end,) if instr.sourceReg == Register.RA else (InstrResult.unhandled, buildExpr('@','JR',history.read(instr.sourceReg))),
     RegOp.JALR: lambda instr, history: (InstrResult.function, '{}'.format(history.read(instr.sourceReg, basicTypes.address))),
     RegOp.ADD: assignReg('D','S+T','+'),
