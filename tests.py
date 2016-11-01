@@ -158,8 +158,7 @@ class TestStructLookup(unittest.TestCase):
 
     def test_pointer(self):
         indirect = self.history.lookupAddress(basicTypes.word, self.ptr)
-        self.assertEqual(indirect.name, 'bar')
-        self.assertEqual(indirect.type, 'testStruct')
+        self.assertEqual('{}'.format(indirect), 'bar.zero')
 
     @unittest.skip('still figuring out how this should work')
     def test_flag(self):

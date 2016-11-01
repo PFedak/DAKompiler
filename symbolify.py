@@ -442,10 +442,6 @@ class VariableHistory:
         others = []
         if isinstance(address, algebra.Literal):
             memOffset = address.value
-        elif isinstance(address, algebra.Symbol):
-            if isinstance(address.type, basicTypes.Pointer):
-                return algebra.Symbol(address.type.target if address.type.target else address.name,
-                    address.type.pointedType)
         elif isinstance(address, algebra.Expression) and address.op == '+':
             memOffset = address.constant.value if address.constant else 0
             for term in address.args:
@@ -455,6 +451,13 @@ class VariableHistory:
                     base = term
                 else:
                     others.append(term)
+        elif isinstance(address.type, basicTypes.Pointer):
+            if basicTypes.isIndexable(address.type.pointedType):
+                base = address
+                memOffset = 0
+            else:
+                return algebra.Symbol(address.type.target if address.type.target else address.name,
+                    address.type.pointedType)
 
         if not base:
             #check for trig lookup
@@ -475,7 +478,7 @@ class VariableHistory:
         if basicTypes.isIndexable(base.type.pointedType):
             if memOffset >= self.getSize(base.type.pointedType):
                 raise Exception('trying to look up address {:#x} in {} (only {:#x} bytes)'.format(
-                    memOffset, base.type.pointedType, self.getSize(base.type)))
+                    memOffset, base.type.pointedType, self.getSize(base.type.pointedType)))
             if base.type.target:
                 return self.subLookup(fmt, algebra.Symbol(base.type.target, base.type.pointedType), memOffset, others)
             else:
